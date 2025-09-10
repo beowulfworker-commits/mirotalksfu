@@ -605,17 +605,28 @@ async function refreshMyAudioDevices() {
     if (speakerSelect) speakerSelect.selectedIndex = speakerSelectIndex;
 }
 
+async function getUserMediaWithTimeout(constraints, timeout = 10000) {
+    const timer = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Permission timeout')), timeout)
+    );
+    return Promise.race([navigator.mediaDevices.getUserMedia(constraints), timer]);
+}
+
+async function requestDevicePermissions(constraints) {
+    const stream = await getUserMediaWithTimeout(constraints);
+    await stopTracks(stream);
+}
+
 async function initEnumerateVideoDevices() {
     // allow the video
-    await navigator.mediaDevices
-        .getUserMedia({ video: true })
-        .then(async (stream) => {
-            await enumerateVideoDevices(stream);
-            isVideoAllowed = true;
-        })
-        .catch(() => {
-            isVideoAllowed = false;
-        });
+    try {
+        const stream = await getUserMediaWithTimeout({ video: true });
+        await enumerateVideoDevices(stream);
+        isVideoAllowed = true;
+    } catch (err) {
+        console.warn('[initEnumerateVideoDevices] video not allowed', err);
+        isVideoAllowed = false;
+    }
 }
 
 async function enumerateVideoDevices(stream) {
@@ -647,16 +658,15 @@ async function enumerateVideoDevices(stream) {
 
 async function initEnumerateAudioDevices() {
     // allow the audio
-    await navigator.mediaDevices
-        .getUserMedia({ audio: true })
-        .then(async (stream) => {
-            await enumerateAudioDevices(stream);
-            await getMicrophoneVolumeIndicator(stream);
-            isAudioAllowed = true;
-        })
-        .catch(() => {
-            isAudioAllowed = false;
-        });
+    try {
+        const stream = await getUserMediaWithTimeout({ audio: true });
+        await enumerateAudioDevices(stream);
+        await getMicrophoneVolumeIndicator(stream);
+        isAudioAllowed = true;
+    } catch (err) {
+        console.warn('[initEnumerateAudioDevices] audio not allowed', err);
+        isAudioAllowed = false;
+    }
 }
 
 async function enumerateAudioDevices(stream) {
@@ -2168,16 +2178,35 @@ function handleButtons() {
         }
         if (isPushToTalkActive) return;
         setAudioButtonsDisabled(true);
-        if (!isEnumerateAudioDevices) await initEnumerateAudioDevices();
+        const enableAudio = async () => {
+            if (!isEnumerateAudioDevices) await initEnumerateAudioDevices();
 
-        const producerExist = rc.producerExist(RoomClient.mediaType.audio);
-        console.log('START AUDIO producerExist --->', producerExist);
+            const producerExist = rc.producerExist(RoomClient.mediaType.audio);
+            console.log('START AUDIO producerExist --->', producerExist);
 
-        producerExist
-            ? await rc.resumeProducer(RoomClient.mediaType.audio)
-            : await rc.produce(RoomClient.mediaType.audio, microphoneSelect.value);
+            producerExist
+                ? await rc.resumeProducer(RoomClient.mediaType.audio)
+                : await rc.produce(RoomClient.mediaType.audio, microphoneSelect.value);
 
-        rc.updatePeerInfo(peer_name, socket.id, 'audio', true);
+            rc.updatePeerInfo(peer_name, socket.id, 'audio', true);
+        };
+
+        try {
+            await enableAudio();
+        } catch (err) {
+            if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+                try {
+                    await requestDevicePermissions({ audio: true });
+                    await enableAudio();
+                } catch (error) {
+                    handleMediaError('audio', error);
+                }
+            } else {
+                handleMediaError('audio', err);
+            }
+        } finally {
+            setAudioButtonsDisabled(false);
+        }
     };
     stopAudioButton.onclick = async () => {
         if (isPushToTalkActive) return;
@@ -2198,8 +2227,27 @@ function handleButtons() {
             return userLog('warning', 'The moderator does not allow you to unhide', 'top-end', 6000);
         }
         setVideoButtonsDisabled(true);
-        if (!isEnumerateVideoDevices) await initEnumerateVideoDevices();
-        await rc.produce(RoomClient.mediaType.video, videoSelect.value);
+        const enableVideo = async () => {
+            if (!isEnumerateVideoDevices) await initEnumerateVideoDevices();
+            await rc.produce(RoomClient.mediaType.video, videoSelect.value);
+        };
+
+        try {
+            await enableVideo();
+        } catch (err) {
+            if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+                try {
+                    await requestDevicePermissions({ video: true });
+                    await enableVideo();
+                } catch (error) {
+                    handleMediaError('video', error);
+                }
+            } else {
+                handleMediaError('video', err);
+            }
+        } finally {
+            setVideoButtonsDisabled(false);
+        }
         // await rc.resumeProducer(RoomClient.mediaType.video);
     };
     stopVideoButton.onclick = () => {
