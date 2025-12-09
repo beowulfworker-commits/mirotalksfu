@@ -2537,7 +2537,7 @@ class RoomClient {
     handleHideMe() {
         const myScreenWrap = this.getId(this.screenProducerId + '__video');
         const myVideoWrap = this.getId(this.videoProducerId + '__video');
-        const myVideoWrapOff = this.getId(this.peer_id + '__videoOff');
+        const myVideoWrapOff = this.getPeerCameraCard(this.peer_id);
         const myVideoPinBtn = this.getId(this.videoProducerId + '__pin');
         const myScreenPinBtn = this.getId(this.screenProducerId + '__pin');
         console.log('handleHideMe', {
@@ -2581,6 +2581,8 @@ class RoomClient {
                 d = document.createElement('div');
                 d.className = 'Camera';
                 d.id = id + '__video';
+                d.dataset.peerId = this.peer_id;
+                d.dataset.kind = isScreen ? 'screen' : 'camera';
 
                 elem = document.createElement('video');
                 elem.setAttribute('id', id);
@@ -2649,6 +2651,14 @@ class RoomClient {
 
                 vb.appendChild(p);
                 d.appendChild(elem);
+
+                if (!isScreen) {
+                    const avatar = document.createElement('img');
+                    avatar.className = 'videoAvatarImage';
+                    avatar.id = this.peer_id + '__img';
+                    avatar.style.display = 'none';
+                    d.appendChild(avatar);
+                }
                 d.appendChild(pm);
                 d.appendChild(i);
                 d.appendChild(p);
@@ -2679,6 +2689,10 @@ class RoomClient {
 
                 this.popupPeerInfo(p.id, this.peer_info);
                 this.checkPeerInfoStatus(this.peer_info);
+
+                if (!isScreen) {
+                    this.setVideoAvatarImgName(this.peer_id + '__img', this.peer_name, this.peer_info.peer_avatar);
+                }
 
                 if (isScreen && this.videoMediaContainer.childElementCount > 1) pn.click();
 
@@ -3032,6 +3046,7 @@ class RoomClient {
         const remotePeerAudioVolume = peer_info.peer_audio_volume;
         const remotePrivacyOn = peer_info.peer_video_privacy;
         const remotePeerPresenter = peer_info.peer_presenter;
+        const remotePeerAvatar = peer_info.peer_avatar;
 
         switch (type) {
             case mediaType.video:
@@ -3041,6 +3056,8 @@ class RoomClient {
                 d = document.createElement('div');
                 d.className = 'Camera';
                 d.id = id + '__video';
+                d.dataset.peerId = remotePeerId;
+                d.dataset.kind = remoteIsScreen ? 'screen' : 'camera';
 
                 elem = document.createElement('video');
                 elem.setAttribute('id', id);
@@ -3153,6 +3170,14 @@ class RoomClient {
                 if (!this.isMobileDevice) vb.appendChild(pn);
 
                 d.appendChild(elem);
+
+                if (!remoteIsScreen) {
+                    const avatar = document.createElement('img');
+                    avatar.className = 'videoAvatarImage';
+                    avatar.id = remotePeerId + '__img';
+                    avatar.style.display = 'none';
+                    d.appendChild(avatar);
+                }
                 d.appendChild(i);
                 d.appendChild(p);
                 d.appendChild(pm);
@@ -3182,6 +3207,10 @@ class RoomClient {
                 this.handleZV(elem.id, d.id, remotePeerId);
                 this.popupPeerInfo(p.id, peer_info);
                 this.checkPeerInfoStatus(peer_info);
+
+                if (!remoteIsScreen) {
+                    this.setVideoAvatarImgName(remotePeerId + '__img', peer_name, remotePeerAvatar);
+                }
 
                 if (!remoteIsScreen && remotePrivacyOn) this.setVideoPrivacyStatus(remotePeerId, remotePrivacyOn);
 
@@ -3328,85 +3357,134 @@ class RoomClient {
         this.sound('left');
     }
 
+    getPeerCameraCard(peer_id) {
+        return this.videoMediaContainer.querySelector(`.Camera[data-peer-id="${peer_id}"][data-kind="camera"]`);
+    }
+
+    getPeerCameraVideo(peer_id) {
+        const peerCard = this.getPeerCameraCard(peer_id);
+        if (!peerCard) return null;
+        return peerCard.querySelector(`video[name="${peer_id}"]`);
+    }
+
+    ensurePeerAvatar(peer_info, peerCard) {
+        const { peer_id, peer_name, peer_avatar } = peer_info;
+        let avatar = peerCard.querySelector('.videoAvatarImage');
+        if (!avatar) {
+            avatar = document.createElement('img');
+            avatar.className = 'videoAvatarImage';
+            avatar.id = peer_id + '__img';
+            peerCard.appendChild(avatar);
+        }
+        this.setVideoAvatarImgName(avatar.id, peer_name, peer_avatar);
+        return avatar;
+    }
+
+    isPeerCameraHidden(peer_id) {
+        const peerCard = this.getPeerCameraCard(peer_id);
+        if (!peerCard) return false;
+        return peerCard.classList.contains('video-off') || peerCard.dataset.placeholder === 'true';
+    }
+
     // ####################################################
     // HANDLE VIDEO OFF
     // ####################################################
 
     setVideoOff(peer_info, remotePeer = false) {
-        //console.log('setVideoOff', peer_info);
+        const { peer_id, peer_name, peer_audio, peer_presenter } = peer_info;
+
+        const existingCard = this.getPeerCameraCard(peer_id);
+        const existingVideo = this.getPeerCameraVideo(peer_id);
+
+        if (existingCard && existingVideo) {
+            // Avoid spawning a new card when toggling camera off; reuse the existing peer tile.
+            const avatar = this.ensurePeerAvatar(peer_info, existingCard);
+            avatar.style.display = 'block';
+            existingVideo.classList.add('hidden');
+            existingVideo.style.display = 'none';
+            existingVideo.pause();
+            existingCard.classList.add('video-off');
+            handleAspectRatio();
+            console.log('[setVideoOff] Video-element-count', this.videoMediaContainer.childElementCount);
+            wbUpdate();
+            this.editorUpdate();
+            this.handleHideMe();
+            return;
+        }
+
         let d, vb, i, h, au, sf, sm, sv, gl, ban, ko, p, pm, pb, pv;
 
-        const { peer_id, peer_name, peer_avatar, peer_audio, peer_presenter } = peer_info;
-
-        this.removeVideoOff(peer_id);
-
-        d = document.createElement('div');
+        d = existingCard || document.createElement('div');
         d.className = 'Camera';
-        d.id = peer_id + '__videoOff';
+        d.id = existingCard ? existingCard.id : peer_id + '__videoOff';
+        d.dataset.peerId = peer_id;
+        d.dataset.kind = 'camera';
+        d.dataset.placeholder = 'true';
 
-        vb = document.createElement('div');
+        const au_id = peer_id + '__audio';
+        const pv_id = peer_id + '___pVolume';
+
+        vb = this.getId(peer_id + '__vb') || document.createElement('div');
         vb.id = peer_id + '__vb';
         vb.className = 'videoMenuBar hidden';
 
-        au = this.createButton(peer_id + '__audio', peer_audio ? html.audioOn : html.audioOff);
-
-        pv = document.createElement('input');
-        pv.id = peer_id + '___pVolume';
+        pv = this.getId(pv_id) || document.createElement('input');
+        pv.id = pv_id;
         pv.type = 'range';
         pv.min = 0;
         pv.max = 100;
-        pv.value = 100;
+        pv.value = pv.value || 100;
 
-        if (remotePeer) {
-            sf = this.createButton('remotePeer___' + peer_id + '___sendFile', html.sendFile);
-            sm = this.createButton('remotePeer___' + peer_id + '___sendMsg', html.sendMsg);
-            sv = this.createButton('remotePeer___' + peer_id + '___sendVideo', html.sendVideo);
-            gl = this.createButton('remotePeer___' + peer_id + '___geoLocation', html.geolocation);
-            ban = this.createButton('remotePeer___' + peer_id + '___ban', html.ban);
-            ko = this.createButton('remotePeer___' + peer_id + '___kickOut', html.kickOut);
-        }
+        au = this.getId(au_id) || this.createButton(au_id, peer_audio ? html.audioOn : html.audioOff);
+        sf = this.getId('remotePeer___' + peer_id + '___sendFile') || this.createButton('remotePeer___' + peer_id + '___sendFile', html.sendFile);
+        sm = this.getId('remotePeer___' + peer_id + '___sendMsg') || this.createButton('remotePeer___' + peer_id + '___sendMsg', html.sendMsg);
+        sv = this.getId('remotePeer___' + peer_id + '___sendVideo') || this.createButton('remotePeer___' + peer_id + '___sendVideo', html.sendVideo);
+        gl = this.getId('remotePeer___' + peer_id + '___geoLocation') || this.createButton('remotePeer___' + peer_id + '___geoLocation', html.geolocation);
+        ban = this.getId('remotePeer___' + peer_id + '___ban') || this.createButton('remotePeer___' + peer_id + '___ban', html.ban);
+        ko = this.getId('remotePeer___' + peer_id + '___kickOut') || this.createButton('remotePeer___' + peer_id + '___kickOut', html.kickOut);
 
-        i = document.createElement('img');
-        i.className = 'videoAvatarImage';
-        i.id = peer_id + '__img';
+        i = this.ensurePeerAvatar(peer_info, d);
+        i.style.display = 'block';
 
-        p = document.createElement('p');
+        p = this.getId(peer_id + '__name') || document.createElement('p');
         p.id = peer_id + '__name';
         p.className = html.userName;
         p.innerText = (peer_presenter ? '⭐️ ' : '') + peer_name + (remotePeer ? '' : ' (me) ');
 
-        h = document.createElement('i');
+        h = this.getId(peer_id + '__hand') || document.createElement('i');
         h.id = peer_id + '__hand';
         h.className = html.userHand;
 
-        pm = document.createElement('div');
-        pb = document.createElement('div');
+        pm = this.getId(peer_id + '__pitchMeter') || document.createElement('div');
+        pb = this.getId(peer_id + '__pitchBar') || document.createElement('div');
         pm.setAttribute('id', peer_id + '__pitchMeter');
         pb.setAttribute('id', peer_id + '__pitchBar');
         pm.className = 'speechbar';
         pb.className = 'bar';
         pb.style.height = '1%';
-        pm.appendChild(pb);
+        if (!pb.parentElement) pm.appendChild(pb);
 
-        if (remotePeer) {
-            BUTTONS.videoOff.ejectButton && vb.appendChild(ko);
-            BUTTONS.videoOff.banButton && vb.appendChild(ban);
-            BUTTONS.videoOff.geolocationButton && vb.appendChild(gl);
-            BUTTONS.videoOff.sendVideoButton && vb.appendChild(sv);
-            BUTTONS.videoOff.sendFileButton && vb.appendChild(sf);
-            BUTTONS.videoOff.sendMessageButton && vb.appendChild(sm);
+        if (!pv.parentElement) {
+            if (remotePeer) {
+                BUTTONS.videoOff.ejectButton && vb.appendChild(ko);
+                BUTTONS.videoOff.banButton && vb.appendChild(ban);
+                BUTTONS.videoOff.geolocationButton && vb.appendChild(gl);
+                BUTTONS.videoOff.sendVideoButton && vb.appendChild(sv);
+                BUTTONS.videoOff.sendFileButton && vb.appendChild(sf);
+                BUTTONS.videoOff.sendMessageButton && vb.appendChild(sm);
+            }
+            BUTTONS.videoOff.audioVolumeInput && vb.appendChild(pv);
+            vb.appendChild(au);
         }
-        BUTTONS.videoOff.audioVolumeInput && vb.appendChild(pv);
 
-        vb.appendChild(au);
-        d.appendChild(i);
-        d.appendChild(p);
-        d.appendChild(h);
-        d.appendChild(pm);
-        //d.appendChild(vb);
+        if (!p.parentElement) d.appendChild(p);
+        if (!i.parentElement) d.appendChild(i);
+        if (!h.parentElement) d.appendChild(h);
+        if (!pm.parentElement) d.appendChild(pm);
 
-        document.body.appendChild(vb);
-        this.videoMediaContainer.appendChild(d);
+        if (!vb.parentElement) document.body.appendChild(vb);
+        if (!d.parentElement) this.videoMediaContainer.appendChild(d);
+
         BUTTONS.videoOff.muteAudioButton && this.handleAU(au.id);
 
         if (remotePeer) {
@@ -3418,15 +3496,14 @@ class RoomClient {
             this.handleBAN(ban.id);
             this.handleKO(ko.id);
         } else {
-            this.handlePV(this.audioConsumers.get(pv.id) + '___' + pv.id);
+            const pvConsumer = this.audioConsumers.get(pv.id);
+            if (pvConsumer) this.handlePV(pvConsumer + '___' + pv.id);
         }
 
         this.handleVB(d.id, vb.id);
         this.handleDD(d.id, peer_id, !remotePeer);
         this.popupPeerInfo(p.id, peer_info);
         this.checkPeerInfoStatus(peer_info);
-        this.setVideoAvatarImgName(i.id, peer_name, peer_avatar);
-        this.getId(i.id).style.display = 'block';
 
         if (isParticipantsListOpen) getRoomParticipants();
 
@@ -3443,6 +3520,8 @@ class RoomClient {
 
         remotePeer ? this.setPeerAudio(peer_id, peer_audio) : this.setIsAudio(peer_id, peer_audio);
 
+        d.classList.add('video-off');
+
         handleAspectRatio();
 
         console.log('[setVideoOff] Video-element-count', this.videoMediaContainer.childElementCount);
@@ -3455,17 +3534,34 @@ class RoomClient {
     }
 
     removeVideoOff(peer_id) {
-        const pvOff = this.getId(peer_id + '__videoOff');
+        const peerCard = this.getPeerCameraCard(peer_id);
         const vb = this.getId(peer_id + '__vb');
 
-        if (vb) vb.parentNode.removeChild(vb);
-
-        if (pvOff) {
-            pvOff.parentNode.removeChild(pvOff);
-            handleAspectRatio();
-            console.log('[removeVideoOff] Video-element-count', this.videoMediaContainer.childElementCount);
-            if (peer_id != this.peer_id) this.sound('left');
+        if (!peerCard) {
+            if (vb) vb.parentNode.removeChild(vb);
+            return;
         }
+
+        const isPlaceholder = peerCard.dataset.placeholder === 'true' && !peerCard.querySelector('video');
+        const avatar = peerCard.querySelector('.videoAvatarImage');
+        const videoEl = this.getPeerCameraVideo(peer_id);
+
+        if (isPlaceholder) {
+            if (peerCard.parentNode) peerCard.parentNode.removeChild(peerCard);
+            if (vb) vb.parentNode.removeChild(vb);
+        } else {
+            if (avatar) avatar.style.display = 'none';
+            if (videoEl) {
+                videoEl.classList.remove('hidden');
+                videoEl.style.display = 'block';
+                videoEl.play().catch(() => {});
+            }
+            peerCard.classList.remove('video-off');
+        }
+
+        handleAspectRatio();
+        console.log('[removeVideoOff] Video-element-count', this.videoMediaContainer.childElementCount);
+        if (peer_id != this.peer_id) this.sound('left');
     }
 
     // ####################################################
@@ -8819,8 +8915,7 @@ class RoomClient {
                                 }
                             }
                         } else {
-                            const peerVideoOff = this.getId(data.peer_id + '__videoOff');
-                            if (peerVideoOff) {
+                            if (this.isPeerCameraHidden(data.peer_id)) {
                                 if (isRulesActive && isPresenter) {
                                     data.action = 'unhide';
                                     return this.confirmPeerAction(data.action, data);
