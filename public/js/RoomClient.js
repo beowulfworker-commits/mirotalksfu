@@ -9685,6 +9685,9 @@ class RoomClient {
                     if (canUpdateMediaStatus) this.setPeerAudio(peer_id, status);
                     break;
                 case 'video':
+                    if (status && canUpdateMediaStatus) {
+                        this.removeVideoOff(peer_id);
+                    }
                     break;
                 case 'screen':
                     break;
