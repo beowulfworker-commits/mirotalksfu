@@ -165,6 +165,50 @@ body {
     margin-bottom: 0;
 }
 
+.init-device-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    justify-content: center;
+    align-items: center;
+}
+
+.init-device-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    border-radius: 12px;
+    background: #1f1f1f;
+    color: #fff;
+    border: 1px solid #333;
+    cursor: pointer;
+    transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+    width: 100%;
+    max-width: 240px;
+}
+
+.init-device-toggle i {
+    width: 18px;
+    text-align: center;
+}
+
+.init-device-toggle span {
+    flex: 1;
+    text-align: left;
+}
+
+.init-device-toggle.active {
+    background: #104c34;
+    border-color: #2caf76;
+    color: #fff;
+}
+
+.init-device-toggle:hover {
+    background: #2a2a2a;
+    border-color: #3d3d3d;
+}
+
 .init-selects {
     display: flex;
     flex-direction: column;
