@@ -217,6 +217,8 @@ const microphoneSelect = getId('microphoneSelect');
 const initMicrophoneSelect = getId('initMicrophoneSelect');
 const speakerSelect = getId('speakerSelect');
 const initSpeakerSelect = getId('initSpeakerSelect');
+const initCameraToggleButton = getId('initCameraToggleButton');
+const initMicrophoneToggleButton = getId('initMicrophoneToggleButton');
 
 // ####################################################
 // VIRTUAL BACKGROUND DEFAULT IMAGES AND INIT CLASS
@@ -840,6 +842,16 @@ function setupInitButtons() {
         getId('usernameInput').value = '';
         toggleUsernameEmoji();
     };
+    if (initCameraToggleButton) {
+        initCameraToggleButton.onclick = () => {
+            handleVideo();
+        };
+    }
+    if (initMicrophoneToggleButton) {
+        initMicrophoneToggleButton.onclick = () => {
+            handleAudio();
+        };
+    }
 }
 
 // ####################################################
@@ -1255,6 +1267,7 @@ async function whoAreYou() {
         elemDisplay('initVideoSelect', false);
         elemDisplay('tabVideoDevicesBtn', false);
         initVideoContainerShow(false);
+        elemDisplay('initCameraToggleButton', false);
     }
     if (!BUTTONS.main.startAudioButton) {
         isAudioAllowed = false;
@@ -1264,6 +1277,7 @@ async function whoAreYou() {
         elemDisplay('initMicrophoneSelect', false);
         elemDisplay('initSpeakerSelect', false);
         elemDisplay('tabAudioDevicesBtn', false);
+        elemDisplay('initMicrophoneToggleButton', false);
     }
     if (!BUTTONS.main.startScreenButton) {
         hide(initStartScreenButton);
@@ -1380,6 +1394,39 @@ async function whoAreYou() {
         hide(initMicrophoneSelect);
         hide(initSpeakerSelect);
     }
+
+    syncInitDeviceControls();
+}
+
+function updateInitDeviceToggle(button, enabled, onIcon, offIcon, onLabel, offLabel) {
+    if (!button) return;
+
+    button.className = `init-device-toggle ${enabled ? onIcon : offIcon}`;
+    button.classList.toggle('active', enabled);
+    button.title = enabled ? onLabel : offLabel;
+    button.setAttribute('aria-label', button.title);
+}
+
+function syncInitDeviceControls() {
+    updateInitDeviceToggle(
+        initCameraToggleButton,
+        isVideoAllowed,
+        'fas fa-video',
+        'fas fa-video-slash',
+        'Камера включена',
+        'Камера выключена'
+    );
+    updateInitDeviceToggle(
+        initMicrophoneToggleButton,
+        isAudioAllowed,
+        'fas fa-microphone',
+        'fas fa-microphone-slash',
+        'Микрофон включен',
+        'Микрофон выключен'
+    );
+
+    if (initVideoSelect) initVideoSelect.disabled = !isVideoAllowed;
+    if (initMicrophoneSelect) initMicrophoneSelect.disabled = !isAudioAllowed;
 }
 
 function handleAudio() {
@@ -1389,6 +1436,7 @@ function handleAudio() {
     setColor(startAudioButton, isAudioAllowed ? 'white' : 'red');
     checkInitAudio(isAudioAllowed);
     lS.setInitConfig(lS.MEDIA_TYPE.audio, isAudioAllowed);
+    syncInitDeviceControls();
 }
 
 function handleVideo() {
@@ -1398,6 +1446,8 @@ function handleVideo() {
     setColor(startVideoButton, isVideoAllowed ? 'white' : 'red');
     checkInitVideo(isVideoAllowed);
     lS.setInitConfig(lS.MEDIA_TYPE.video, isVideoAllowed);
+
+    syncInitDeviceControls();
 
     elemDisplay('imageGrid', false);
 
@@ -1431,6 +1481,8 @@ async function handleAudioVideo() {
     setColor(startVideoButton, isVideoAllowed ? 'white' : 'red');
     await checkInitVideo(isVideoAllowed);
     checkInitAudio(isAudioAllowed);
+
+    syncInitDeviceControls();
 
     elemDisplay('imageGrid', false);
 
