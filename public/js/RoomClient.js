@@ -3794,6 +3794,9 @@ class RoomClient {
     setIsVideo(status) {
         if (!isBroadcastingEnabled || (isBroadcastingEnabled && isPresenter)) {
             this.peer_info.peer_video = status;
+            if (status) {
+                this.removeVideoOff(this.peer_id);
+            }
             if (!this.peer_info.peer_video) {
                 console.log('Set local video enabled: ' + status);
                 this.setVideoOff(this.peer_info, false);
