@@ -2691,7 +2691,12 @@ class RoomClient {
                 this.checkPeerInfoStatus(this.peer_info);
 
                 if (!isScreen) {
-                    this.setVideoAvatarImgName(this.peer_id + '__img', this.peer_name, this.peer_info.peer_avatar);
+                    this.setVideoAvatarImgName(
+                        this.peer_id + '__img',
+                        this.peer_name,
+                        this.peer_info.peer_avatar,
+                        this.peer_id
+                    );
                 }
 
                 if (isScreen && this.videoMediaContainer.childElementCount > 1) pn.click();
@@ -3209,7 +3214,7 @@ class RoomClient {
                 this.checkPeerInfoStatus(peer_info);
 
                 if (!remoteIsScreen) {
-                    this.setVideoAvatarImgName(remotePeerId + '__img', peer_name, remotePeerAvatar);
+                    this.setVideoAvatarImgName(remotePeerId + '__img', peer_name, remotePeerAvatar, remotePeerId);
                 }
 
                 if (!remoteIsScreen && remotePrivacyOn) this.setVideoPrivacyStatus(remotePeerId, remotePrivacyOn);
@@ -3367,16 +3372,41 @@ class RoomClient {
         return peerCard.querySelector(`video[name="${peer_id}"]`);
     }
 
+    getOrCreatePeerCameraCard(peer_info) {
+        const { peer_id } = peer_info;
+        let peerCard = this.getPeerCameraCard(peer_id);
+        if (peerCard) return peerCard;
+
+        peerCard = document.createElement('div');
+        peerCard.className = 'Camera';
+        peerCard.id = peer_id + '__videoOff';
+        peerCard.dataset.peerId = peer_id;
+        peerCard.dataset.kind = 'camera';
+        peerCard.dataset.placeholder = 'true';
+        this.videoMediaContainer.appendChild(peerCard);
+
+        return peerCard;
+    }
+
     ensurePeerAvatar(peer_info, peerCard) {
         const { peer_id, peer_name, peer_avatar } = peer_info;
-        let avatar = peerCard.querySelector('.videoAvatarImage');
+        const card = peerCard || this.getOrCreatePeerCameraCard(peer_info);
+
+        if (!card) {
+            console.warn('Avatar container not found for peer', peer_id);
+            return null;
+        }
+
+        let avatar = card.querySelector('.videoAvatarImage');
         if (!avatar) {
             avatar = document.createElement('img');
             avatar.className = 'videoAvatarImage';
             avatar.id = peer_id + '__img';
-            peerCard.appendChild(avatar);
+            avatar.style.display = 'none';
+            card.appendChild(avatar);
         }
-        this.setVideoAvatarImgName(avatar.id, peer_name, peer_avatar);
+
+        this.setVideoAvatarImgName(avatar, peer_name, peer_avatar, peer_id);
         return avatar;
     }
 
@@ -3414,12 +3444,7 @@ class RoomClient {
 
         let d, vb, i, h, au, sf, sm, sv, gl, ban, ko, p, pm, pb, pv;
 
-        d = existingCard || document.createElement('div');
-        d.className = 'Camera';
-        d.id = existingCard ? existingCard.id : peer_id + '__videoOff';
-        d.dataset.peerId = peer_id;
-        d.dataset.kind = 'camera';
-        d.dataset.placeholder = 'true';
+        d = existingCard || this.getOrCreatePeerCameraCard(peer_info);
 
         const au_id = peer_id + '__audio';
         const pv_id = peer_id + '___pVolume';
@@ -3800,16 +3825,38 @@ class RoomClient {
         }
     }
 
-    setVideoAvatarImgName(elemId, peer_name, peer_avatar = false) {
-        let elem = this.getId(elemId);
+    setVideoAvatarImgName(elemOrId, peer_name, peer_avatar = false, peer_id = null) {
+        let avatarImg = elemOrId instanceof HTMLElement ? elemOrId : this.getId(elemOrId);
+        let avatarContainer = avatarImg?.parentElement || null;
+
+        if (!avatarImg) {
+            const targetPeerId = peer_id || (typeof elemOrId === 'string' ? elemOrId.replace(/__img$/, '') : null);
+            const peerCard = targetPeerId ? this.getPeerCameraCard(targetPeerId) : null;
+
+            if (!peerCard) {
+                console.warn('Avatar container not found for peer', targetPeerId || peer_name);
+                return;
+            }
+
+            avatarContainer = peerCard;
+            avatarImg = document.createElement('img');
+            avatarImg.className = 'videoAvatarImage';
+            avatarImg.id = `${targetPeerId}__img`;
+            avatarContainer.appendChild(avatarImg);
+        }
+
+        if (!avatarImg.parentElement && avatarContainer) {
+            avatarContainer.appendChild(avatarImg);
+        }
+
         if (peer_avatar && rc.isImageURL(peer_avatar)) {
-            elem.setAttribute('src', peer_avatar);
+            avatarImg.setAttribute('src', peer_avatar);
         } else if (cfg.useAvatarSvg) {
             rc.isValidEmail(peer_name)
-                ? elem.setAttribute('src', this.genGravatar(peer_name))
-                : elem.setAttribute('src', this.genAvatarSvg(peer_name, 250));
+                ? avatarImg.setAttribute('src', this.genGravatar(peer_name))
+                : avatarImg.setAttribute('src', this.genAvatarSvg(peer_name, 250));
         } else {
-            elem.setAttribute('src', image.avatar);
+            avatarImg.setAttribute('src', image.avatar);
         }
     }
 
