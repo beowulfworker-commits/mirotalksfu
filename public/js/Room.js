@@ -1578,15 +1578,14 @@ async function shareRoom(useNavigator = false) {
             </div>
             <br/>
             <p style="background:transparent; color:rgb(8, 189, 89);">Присоединяйтесь с мобильного устройства</p>
-            <p style="background:transparent; color:white; font-family: Arial, Helvetica, sans-serif;">Приложения не нужны: просто считайте QR‑код камерой телефона или пригласите кого‑то, отправив эту ссылку</p>
             <p style="background:transparent; color:rgb(8, 189, 89);">${RoomURL}</p>`,
             showDenyButton: true,
             showCancelButton: true,
             cancelButtonColor: 'red',
             denyButtonColor: 'green',
-            confirmButtonText: `Скопировать ссылку`,
-            denyButtonText: `Пригласить по email`,
-            cancelButtonText: `Закрыть`,
+            confirmButtonText: `Copy`,
+            denyButtonText: `Email`,
+            cancelButtonText: `Close`,
             showClass: { popup: 'animate__animated animate__fadeInDown' },
             hideClass: { popup: 'animate__animated animate__fadeOutUp' },
         }).then((result) => {
