@@ -1,5 +1,7 @@
 'use strict';
 
+const ENABLE_GOOGLE_TRANSLATE = false;
+
 function loadScript(src) {
     return new Promise((resolve, reject) => {
         const script = document.createElement('script');
@@ -12,6 +14,8 @@ function loadScript(src) {
 }
 
 function googleTranslateElementInit() {
+    if (!ENABLE_GOOGLE_TRANSLATE) return;
+
     new google.translate.TranslateElement(
         {
             pageLanguage: 'en',
@@ -40,6 +44,8 @@ function googleTranslateElementInit() {
 }
 
 (async function initGoogleTranslate() {
+    if (!ENABLE_GOOGLE_TRANSLATE) return;
+
     try {
         await loadScript('https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit');
     } catch (error) {
