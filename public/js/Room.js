@@ -1323,7 +1323,7 @@ async function whoAreYou() {
         inputAttributes: { maxlength: 254, id: 'usernameInput' },
         inputValue: default_name,
         html: initUser, // Inject HTML
-        confirmButtonText: `Присоединиться к встрече`,
+        confirmButtonText: `Войти`,
         customClass: { popup: 'init-modal-size' },
         showClass: { popup: 'animate__animated animate__fadeInDown' },
         hideClass: { popup: 'animate__animated animate__fadeOutUp' },

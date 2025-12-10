@@ -168,7 +168,7 @@ body {
 .init-device-buttons {
     display: flex;
     flex-wrap: wrap;
-    gap: 10px;
+    gap: 16px;
     justify-content: center;
     align-items: center;
 }
@@ -176,26 +176,20 @@ body {
 .init-device-toggle {
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 10px 14px;
+    justify-content: center;
+    width: 64px;
+    height: 64px;
+    padding: 0;
     border-radius: 12px;
     background: #1f1f1f;
     color: #fff;
     border: 1px solid #333;
     cursor: pointer;
     transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
-    width: 100%;
-    max-width: 240px;
 }
 
 .init-device-toggle i {
-    width: 18px;
-    text-align: center;
-}
-
-.init-device-toggle span {
-    flex: 1;
-    text-align: left;
+    font-size: 22px;
 }
 
 .init-device-toggle.active {
