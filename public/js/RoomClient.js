@@ -1639,13 +1639,6 @@ class RoomClient {
                 await this.sleep(300);
                 await this.pauseAudioProducer();
             }
-        } else {
-            if (isEnumerateAudioDevices && !audioProducerExist) {
-                await this.produce(mediaType.audio, microphoneSelect.value);
-                console.log('09 ----> START AUDIO MEDIA');
-                await this.sleep(300);
-                await this.pauseAudioProducer();
-            }
         }
 
         if (this.isVideoAllowed && !this._moderator.video_start_hidden) {
