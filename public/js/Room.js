@@ -21,7 +21,7 @@ if (location.href.substr(0, 5) !== 'https') location.href = 'https' + location.h
 
 console.log('Window Location', window.location);
 
-const autoStartDevices = false; // не дёргать getUserMedia автоматически
+const autoStartDevices = true; // автоматически запрашиваем устройства для предпросмотра и выбора
 
 const userAgent = navigator.userAgent;
 const parser = new UAParser(userAgent);
