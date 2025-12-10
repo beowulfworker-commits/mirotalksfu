@@ -11,7 +11,7 @@ if (location.href.substr(0, 5) !== 'https') location.href = 'https' + location.h
  * @license For commercial or closed source, contact us at license.mirotalk@gmail.com or purchase directly via CodeCanyon
  * @license CodeCanyon: https://codecanyon.net/item/mirotalk-sfu-webrtc-realtime-video-conferences/40769970
  * @author  Miroslav Pejic - miroslav.pejic.85@gmail.com
- * @version 1.9.45
+ * @version 2.0.53
  *
  */
 
@@ -20,8 +20,6 @@ if (location.href.substr(0, 5) !== 'https') location.href = 'https' + location.h
 // ####################################################
 
 console.log('Window Location', window.location);
-
-const autoStartDevices = false; // не дёргать getUserMedia автоматически
 
 const userAgent = navigator.userAgent;
 const parser = new UAParser(userAgent);
@@ -63,7 +61,7 @@ let survey = {
 
 let redirect = {
     enabled: true,
-    url: '/',
+    url: '/newroom',
 };
 
 let recCodecs = null;
@@ -92,24 +90,15 @@ const _PEER = {
 const initUser = document.getElementById('initUser');
 const initVideoContainerClass = document.querySelector('.init-video-container');
 const bars = document.querySelectorAll('.volume-bar');
-const permissionOverlay = getId('permissionOverlay');
-const permissionMessage = getId('permissionMessage');
-const permissionRetryButton = getId('permissionRetryButton');
-
-if (permissionRetryButton) {
-    permissionRetryButton.onclick = () => {
-        hidePermissionOverlay();
-        if (permissionRetryCallback) permissionRetryCallback();
-    };
-}
 
 const Base64Prefix = 'data:application/pdf;base64,';
 
 // Whiteboard
 const wbImageInput = 'image/*';
 const wbPdfInput = 'application/pdf';
-const wbWidth = 1366;
-const wbHeight = 768;
+// Reference dimensions for whiteboard (16:9 aspect ratio)
+const wbReferenceWidth = 1920;
+const wbReferenceHeight = 1080;
 const wbGridSize = 20;
 const wbStroke = '#cccccc63';
 let wbGridLines = [];
@@ -207,6 +196,7 @@ const pickr = Pickr.create({
 // ENUMERATE DEVICES SELECTS
 // ####################################################
 
+const participantsCountBadge = getId('participantsCountBadge');
 const videoSelect = getId('videoSelect');
 const videoQuality = getId('videoQuality');
 const videoFps = getId('videoFps');
@@ -217,8 +207,6 @@ const microphoneSelect = getId('microphoneSelect');
 const initMicrophoneSelect = getId('initMicrophoneSelect');
 const speakerSelect = getId('speakerSelect');
 const initSpeakerSelect = getId('initSpeakerSelect');
-const initCameraToggleButton = getId('initCameraToggleButton');
-const initMicrophoneToggleButton = getId('initMicrophoneToggleButton');
 
 // ####################################################
 // VIRTUAL BACKGROUND DEFAULT IMAGES AND INIT CLASS
@@ -271,7 +259,6 @@ let isKeepButtonsVisible = false;
 let isShortcutsEnabled = false;
 let isBroadcastingEnabled = false;
 let isLobbyEnabled = false;
-let isLobbyOpen = false;
 let hostOnlyRecording = false;
 let isEnumerateAudioDevices = false;
 let isEnumerateVideoDevices = false;
@@ -290,9 +277,6 @@ let isSpeechSynthesisSupported = 'speechSynthesis' in window;
 let joinRoomWithoutAudioVideo = true;
 let joinRoomWithScreen = false;
 
-let permissionDeniedCounters = { audio: 0, video: 0 };
-let permissionRetryCallback = null;
-
 let audio = false;
 let video = false;
 let screen = false;
@@ -301,6 +285,7 @@ let camera = 'user';
 
 let recTimer = null;
 let recElapsedTime = null;
+let recShowInfo = true;
 
 let wbCanvas = null;
 let wbIsLock = false;
@@ -308,8 +293,10 @@ let wbIsDrawing = false;
 let wbIsOpen = false;
 let wbIsRedoing = false;
 let wbIsEraser = false;
+let wbIsVanishing = false;
 let wbIsBgTransparent = false;
 let wbPop = [];
+let wbVanishingObjects = [];
 let coords = {};
 
 let isButtonsVisible = false;
@@ -318,6 +305,7 @@ let isButtonsBarOver = false;
 let isRoomLocked = false;
 
 let initStream = null;
+let isInitVideoLoaded = false;
 
 let audioContext = null;
 let workletNode = null;
@@ -340,8 +328,25 @@ let quill = null;
 // ####################################################
 
 document.addEventListener('DOMContentLoaded', function () {
+    initCursorLightEffect();
     initClient();
 });
+
+// ####################################################
+// MOUSE CURSOR LIGHT EFFECT
+// ####################################################
+
+function initCursorLightEffect() {
+    if (!videoMediaContainer || !isDesktopDevice) return;
+    videoMediaContainer.classList.add('mouse-light');
+    videoMediaContainer.addEventListener('mousemove', function (e) {
+        const rect = videoMediaContainer.getBoundingClientRect();
+        const x = ((e.clientX - rect.left) / rect.width) * 100;
+        const y = ((e.clientY - rect.top) / rect.height) * 100;
+        videoMediaContainer.style.setProperty('--mouse-x', x + '%');
+        videoMediaContainer.style.setProperty('--mouse-y', y + '%');
+    });
+}
 
 function initClient() {
     setTheme();
@@ -352,7 +357,6 @@ function initClient() {
 
     if (!isMobileDevice) {
         refreshMainButtonsToolTipPlacement();
-        setTippy('closeEmojiPickerContainer', 'Close', 'bottom');
         setTippy('mySettingsCloseBtn', 'Close', 'bottom');
         setTippy(
             'switchDominantSpeakerFocus',
@@ -400,11 +404,6 @@ function initClient() {
             'Only the host (presenter) has the capability to record the meeting',
             'right'
         );
-        setTippy(
-            'switchH264Recording',
-            'Prioritize h.264 with AAC or h.264 with Opus codecs over VP8 with Opus or VP9 with Opus codecs',
-            'right'
-        );
         setTippy('refreshVideoFiles', 'Refresh', 'left');
         setTippy('switchServerRecording', 'The recording will be stored on the server rather than locally', 'right');
         setTippy('whiteboardGhostButton', 'Toggle transparent background', 'bottom');
@@ -412,6 +411,8 @@ function initClient() {
         setTippy('wbBackgroundColorEl', 'Background color', 'bottom');
         setTippy('wbDrawingColorEl', 'Drawing color', 'bottom');
         setTippy('whiteboardPencilBtn', 'Drawing mode', 'bottom');
+        setTippy('whiteboardVanishingBtn', 'Vanishing pen (disappears in 5s)', 'bottom');
+        setTippy('whiteboardEraserBtn', 'Eraser', 'bottom');
         setTippy('whiteboardObjectBtn', 'Object mode', 'bottom');
         setTippy('whiteboardUndoBtn', 'Undo', 'bottom');
         setTippy('whiteboardRedoBtn', 'Redo', 'bottom');
@@ -462,11 +463,7 @@ function initClient() {
         setTippy('transcriptionSpeechStop', 'Stop transcription', 'top');
     }
     setupWhiteboard();
-    if (autoStartDevices) {
-        initEnumerateDevices();
-    } else {
-        initRoom();
-    }
+    initEnumerateDevices();
     setupInitButtons();
 }
 
@@ -509,6 +506,7 @@ function refreshMainButtonsToolTipPlacement() {
         setTippy('raiseHandButton', 'Raise your hand', bPlacement);
         setTippy('lowerHandButton', 'Lower your hand', bPlacement);
         setTippy('chatButton', 'Toggle the chat', bPlacement);
+        setTippy('participantsButton', 'Toggle participants list', bPlacement);
         setTippy('settingsButton', 'Toggle the settings', bPlacement);
         setTippy('exitButton', 'Leave room', bPlacement);
     }
@@ -626,82 +624,20 @@ async function refreshMyAudioDevices() {
     if (speakerSelect) speakerSelect.selectedIndex = speakerSelectIndex;
 }
 
-async function getUserMediaWithTimeout(constraints, timeout = 10000) {
-    const timer = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Permission timeout')), timeout)
-    );
-    return Promise.race([navigator.mediaDevices.getUserMedia(constraints), timer]);
+async function initEnumerateVideoDevices() {
+    // allow the video
+    await navigator.mediaDevices
+        .getUserMedia({ video: true })
+        .then(async (stream) => {
+            await enumerateVideoDevices(stream);
+            isVideoAllowed = true;
+        })
+        .catch(() => {
+            isVideoAllowed = false;
+        });
 }
 
-function getPermissionMessage(mediaType, blocked = false) {
-    const target = mediaType === 'audio' ? 'микрофону' : 'камере';
-    if (blocked) {
-        return 'Вы заблокировали доступ к камере/микрофону в настройках сайта. Откройте настройки сайта в браузере и разрешите доступ, затем обновите страницу.';
-    }
-    return `Чтобы включить доступ к ${target}, разрешите его в настройках сайта (значок замка в адресной строке) и нажмите «Повторить».`;
-}
-
-function showPermissionOverlay(mediaType, blocked = false, onRetry = null) {
-    const tips = blocked
-        ? ''
-        : `<ul>
-                <li>Убедитесь, что доступ не запрещён в настройках сайта.</li>
-                <li>Выберите корректные устройства, если браузер предложит.</li>
-                <li>Повторите попытку, нажав «Повторить» ниже.</li>
-            </ul>`;
-
-    permissionRetryCallback = typeof onRetry === 'function' ? onRetry : null;
-    permissionMessage.innerHTML = `${getPermissionMessage(mediaType, blocked)}${tips}`;
-    permissionOverlay.dataset.mediaType = mediaType;
-    permissionOverlay.classList.remove('hidden');
-}
-
-function hidePermissionOverlay() {
-    permissionOverlay.classList.add('hidden');
-    permissionOverlay.dataset.mediaType = '';
-    permissionMessage.innerHTML = '';
-    permissionRetryCallback = null;
-}
-
-async function requestMedia(mediaType, constraints, onRetry) {
-    hidePermissionOverlay();
-    const requestConstraints = constraints
-        ? constraints
-        : mediaType === 'video'
-          ? { video: true }
-          : { audio: true };
-
-    try {
-        const stream = await getUserMediaWithTimeout(requestConstraints);
-        permissionDeniedCounters[mediaType] = 0;
-        return stream;
-    } catch (err) {
-        const name = err?.name || '';
-        if (['NotAllowedError', 'SecurityError', 'PermissionDeniedError'].includes(name)) {
-            permissionDeniedCounters[mediaType] = permissionDeniedCounters[mediaType] + 1;
-            const blocked = permissionDeniedCounters[mediaType] > 1;
-            showPermissionOverlay(mediaType, blocked, onRetry);
-        } else {
-            handleMediaError(mediaType, err);
-        }
-        throw err;
-    }
-}
-
-async function initEnumerateVideoDevices(keepStream = false, onRetry = null) {
-    try {
-        const stream = await requestMedia('video', { video: true }, onRetry);
-        await enumerateVideoDevices(stream, keepStream);
-        isVideoAllowed = true;
-        return stream;
-    } catch (err) {
-        console.warn('[initEnumerateVideoDevices] video not allowed', err);
-        isVideoAllowed = false;
-        if (keepStream) throw err;
-    }
-}
-
-async function enumerateVideoDevices(stream, keepStream = false) {
+async function enumerateVideoDevices(stream) {
     console.log('02 ----> Get Video Devices');
 
     if (videoSelect) videoSelect.innerHTML = '';
@@ -723,25 +659,26 @@ async function enumerateVideoDevices(stream, keepStream = false) {
             })
         )
         .then(async () => {
-            if (!keepStream) await stopTracks(stream);
+            await stopTracks(stream);
             isEnumerateVideoDevices = true;
         });
 }
 
-async function initEnumerateAudioDevices(keepStream = false, onRetry = null) {
-    try {
-        const stream = await requestMedia('audio', { audio: true }, onRetry);
-        await enumerateAudioDevices(stream, keepStream);
-        isAudioAllowed = true;
-        return stream;
-    } catch (err) {
-        console.warn('[initEnumerateAudioDevices] audio not allowed', err);
-        isAudioAllowed = false;
-        if (keepStream) throw err;
-    }
+async function initEnumerateAudioDevices() {
+    // allow the audio
+    await navigator.mediaDevices
+        .getUserMedia({ audio: true })
+        .then(async (stream) => {
+            await enumerateAudioDevices(stream);
+            await getMicrophoneVolumeIndicator(stream);
+            isAudioAllowed = true;
+        })
+        .catch(() => {
+            isAudioAllowed = false;
+        });
 }
 
-async function enumerateAudioDevices(stream, keepStream = false) {
+async function enumerateAudioDevices(stream) {
     console.log('03 ----> Get Audio Devices');
 
     if (microphoneSelect) microphoneSelect.innerHTML = '';
@@ -770,7 +707,7 @@ async function enumerateAudioDevices(stream, keepStream = false) {
             })
         )
         .then(async () => {
-            if (!keepStream) await stopTracks(stream);
+            await stopTracks(stream);
             isEnumerateAudioDevices = true;
             speakerSelect.disabled = !sinkId;
             // Check if there is speakers
@@ -842,16 +779,6 @@ function setupInitButtons() {
         getId('usernameInput').value = '';
         toggleUsernameEmoji();
     };
-    if (initCameraToggleButton) {
-        initCameraToggleButton.onclick = () => {
-            handleVideo();
-        };
-    }
-    if (initMicrophoneToggleButton) {
-        initMicrophoneToggleButton.onclick = () => {
-            handleAudio();
-        };
-    }
 }
 
 // ####################################################
@@ -1018,6 +945,11 @@ function getPeerName() {
         return 'Invalid name';
     }
     console.log('Direct join', { name: name });
+
+    if (isValidEmail(name)) {
+        getId('notifyEmailInput').value = name;
+    }
+
     return name;
 }
 
@@ -1078,8 +1010,8 @@ function getRoomDuration() {
             Swal.fire({
                 background: swalBackground,
                 position: 'center',
-                title: 'Лимит времени достигнут',
-                text: 'Время комнаты истекло, она скоро закроется',
+                title: 'Time Limit Reached',
+                text: 'The room has reached its time limit and will close shortly',
                 icon: 'warning',
                 timer: 6000, // 6 seconds
                 timerProgressBar: true,
@@ -1144,6 +1076,7 @@ async function checkInitConfig() {
 function getPeerInfo() {
     peer_info = {
         join_data_time: getDataTimeString(),
+        join_tz_offset: new Date().getTimezoneOffset(),
         peer_uuid: peer_uuid,
         peer_id: socket.id,
         peer_name: peer_name,
@@ -1210,6 +1143,9 @@ function getInfo() {
 async function whoAreYou() {
     console.log('04 ----> Who are you?');
 
+    // Initialize video loading state
+    isInitVideoLoaded = !isVideoAllowed;
+
     document.body.style.background = 'var(--body-bg)';
 
     try {
@@ -1219,10 +1155,8 @@ async function whoAreYou() {
         const serverButtons = response.data.message;
         if (serverButtons) {
             // Merge serverButtons into BUTTONS, keeping the existing keys in BUTTONS if they are not present in serverButtons
-            BUTTONS = {
-                ...BUTTONS, // Spread current BUTTONS first to keep existing keys
-                ...serverButtons, // Overwrite or add new keys from serverButtons
-            };
+            BUTTONS = mergeConfig(BUTTONS, serverButtons);
+
             console.log('04 ----> AXIOS ROOM BUTTONS SETTINGS', {
                 serverButtons: serverButtons,
                 clientButtons: BUTTONS,
@@ -1260,6 +1194,7 @@ async function whoAreYou() {
 
     if (!BUTTONS.main.startVideoButton) {
         isVideoAllowed = false;
+        isInitVideoLoaded = true;
         elemDisplay('initVideo', false);
         elemDisplay('initVideoButton', false);
         elemDisplay('initAudioVideoButton', false);
@@ -1267,7 +1202,6 @@ async function whoAreYou() {
         elemDisplay('initVideoSelect', false);
         elemDisplay('tabVideoDevicesBtn', false);
         initVideoContainerShow(false);
-        elemDisplay('initCameraToggleButton', false);
     }
     if (!BUTTONS.main.startAudioButton) {
         isAudioAllowed = false;
@@ -1277,7 +1211,6 @@ async function whoAreYou() {
         elemDisplay('initMicrophoneSelect', false);
         elemDisplay('initSpeakerSelect', false);
         elemDisplay('tabAudioDevicesBtn', false);
-        elemDisplay('initMicrophoneToggleButton', false);
     }
     if (!BUTTONS.main.startScreenButton) {
         hide(initStartScreenButton);
@@ -1287,7 +1220,16 @@ async function whoAreYou() {
     let force_peer_name = false;
 
     try {
-        const { data: profile } = await axios.get('/profile', { timeout: 5000 });
+        // Prepare headers for profile request
+        const headers = {};
+        if (peer_token) {
+            headers.Authorization = `Bearer ${peer_token}`;
+        }
+
+        const { data: profile } = await axios.get('/profile', {
+            timeout: 5000,
+            headers: headers,
+        });
 
         if (profile) {
             console.log('AXIOS GET OIDC Profile retrieved successfully', profile);
@@ -1311,61 +1253,43 @@ async function whoAreYou() {
         console.error('AXIOS OIDC Error fetching profile', error.message || error);
     }
 
-    initUser.classList.toggle('hidden');
-
     Swal.fire({
         allowOutsideClick: false,
         allowEscapeKey: false,
         background: swalBackground,
         title: BRAND.app?.name,
         input: 'text',
-        inputPlaceholder: 'Введите ваше имя',
+        inputPlaceholder: 'Enter your email or name',
         inputAttributes: { maxlength: 254, id: 'usernameInput' },
         inputValue: default_name,
         html: initUser, // Inject HTML
-        confirmButtonText: `Войти`,
+        confirmButtonText: `Join meeting`,
         customClass: { popup: 'init-modal-size' },
         showClass: { popup: 'animate__animated animate__fadeInDown' },
         hideClass: { popup: 'animate__animated animate__fadeOutUp' },
         willOpen: () => {
             hide(loadingDiv);
         },
-        didOpen: () => {
-            const popup = Swal.getPopup();
-            const input = popup ? popup.querySelector('.swal2-input') : null;
-            const actions = popup ? popup.querySelector('.swal2-actions') : null;
-            const confirmButton = popup ? popup.querySelector('.swal2-confirm') : null;
-            const validationMessage = popup ? popup.querySelector('.swal2-validation-message') : null;
-
-            if (input) {
-                input.classList.add('init-name-input');
-            }
-
-            if (actions) {
-                actions.classList.add('init-actions');
-            }
-
-            if (confirmButton) {
-                confirmButton.classList.add('init-join-button');
-            }
-
-            if (validationMessage) {
-                validationMessage.classList.add('init-validation-message');
-            }
-        },
         inputValidator: (name) => {
-            if (!name) return 'Пожалуйста, введите ваше имя';
+            if (isVideoAllowed && !isInitVideoLoaded) {
+                return 'Please wait for video to initialize...';
+            }
+            if (!name) return 'Please enter your email or name';
             const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(name);
             if ((isEmail && name.length > 254) || (!isEmail && name.length > 32)) {
-                return isEmail ? 'Email должен быть не длиннее 254 символов' : 'Имя должно быть не длиннее 32 символов';
+                return isEmail ? 'Email must be max 254 char' : 'Name must be max 32 char';
             }
             name = filterXSS(name);
-            if (isHtml(name)) return 'Недопустимое имя!';
+            if (isHtml(name)) return 'Invalid name!';
             if (!getCookie(room_id + '_name')) {
                 window.localStorage.peer_name = name;
             }
             setCookie(room_id + '_name', name, 30);
             peer_name = name;
+
+            if (isValidEmail(peer_name)) {
+                getId('notifyEmailInput').value = peer_name;
+            }
         },
     }).then(async () => {
         if (!usernameEmoji.classList.contains('hidden')) {
@@ -1379,6 +1303,9 @@ async function whoAreYou() {
         getPeerInfo();
         joinRoom(peer_name, room_id);
     });
+
+    // Show the init user container injected in Swal
+    initUser.classList.toggle('hidden');
 
     if (force_peer_name) {
         getId('usernameInput').disabled = true;
@@ -1394,45 +1321,17 @@ async function whoAreYou() {
         hide(initMicrophoneSelect);
         hide(initSpeakerSelect);
     }
-
-    syncInitDeviceControls();
 }
 
-function updateInitDeviceToggle(button, enabled, onIcon, offIcon, onLabel, offLabel) {
-    if (!button) return;
-    const icon = button.querySelector('i');
-    const label = button.querySelector('span');
-
-    if (icon) {
-        icon.className = enabled ? onIcon : offIcon;
+function mergeConfig(current, updated) {
+    for (const key of Object.keys(updated)) {
+        if (!current.hasOwnProperty(key) || typeof updated[key] !== 'object') {
+            current[key] = updated[key];
+        } else {
+            mergeConfig(current[key], updated[key]);
+        }
     }
-    if (label) {
-        label.textContent = enabled ? onLabel : offLabel;
-    }
-
-    button.classList.toggle('active', enabled);
-}
-
-function syncInitDeviceControls() {
-    updateInitDeviceToggle(
-        initCameraToggleButton,
-        isVideoAllowed,
-        'fas fa-video',
-        'fas fa-video-slash',
-        'Камера включена',
-        'Камера выключена'
-    );
-    updateInitDeviceToggle(
-        initMicrophoneToggleButton,
-        isAudioAllowed,
-        'fas fa-microphone',
-        'fas fa-microphone-slash',
-        'Микрофон включен',
-        'Микрофон выключен'
-    );
-
-    if (initVideoSelect) initVideoSelect.disabled = !isVideoAllowed;
-    if (initMicrophoneSelect) initMicrophoneSelect.disabled = !isAudioAllowed;
+    return current;
 }
 
 function handleAudio() {
@@ -1442,7 +1341,6 @@ function handleAudio() {
     setColor(startAudioButton, isAudioAllowed ? 'white' : 'red');
     checkInitAudio(isAudioAllowed);
     lS.setInitConfig(lS.MEDIA_TYPE.audio, isAudioAllowed);
-    syncInitDeviceControls();
 }
 
 function handleVideo() {
@@ -1452,8 +1350,6 @@ function handleVideo() {
     setColor(startVideoButton, isVideoAllowed ? 'white' : 'red');
     checkInitVideo(isVideoAllowed);
     lS.setInitConfig(lS.MEDIA_TYPE.video, isVideoAllowed);
-
-    syncInitDeviceControls();
 
     elemDisplay('imageGrid', false);
 
@@ -1488,8 +1384,6 @@ async function handleAudioVideo() {
     await checkInitVideo(isVideoAllowed);
     checkInitAudio(isAudioAllowed);
 
-    syncInitDeviceControls();
-
     elemDisplay('imageGrid', false);
 
     isVideoAllowed &&
@@ -1504,6 +1398,7 @@ async function checkInitVideo(isVideoAllowed) {
         if (initVideoSelect.value) {
             initVideoContainerShow();
             await changeCamera(initVideoSelect.value);
+            isInitVideoLoaded = true;
         }
         sound('joined');
     } else {
@@ -1513,6 +1408,7 @@ async function checkInitVideo(isVideoAllowed) {
             initVideoContainerShow(false);
             sound('left');
         }
+        isInitVideoLoaded = !isVideoAllowed;
     }
     initVideoSelect.disabled = !isVideoAllowed;
 }
@@ -1571,20 +1467,21 @@ async function shareRoom(useNavigator = false) {
         Swal.fire({
             background: swalBackground,
             position: 'center',
-            title: 'Поделиться комнатой',
+            title: 'Share the room',
             html: `
             <div id="qrRoomContainer">
                 <canvas id="qrRoom"></canvas>
             </div>
             <br/>
-            <p style="background:transparent; color:rgb(8, 189, 89);">Присоединяйтесь с мобильного устройства</p>
+            <p style="background:transparent; color:rgb(8, 189, 89);">Join from your mobile device</p>
+            <p style="background:transparent; color:white; font-family: Arial, Helvetica, sans-serif;">No need for apps, simply capture the QR code with your mobile camera Or Invite someone else to join by sending them the following URL</p>
             <p style="background:transparent; color:rgb(8, 189, 89);">${RoomURL}</p>`,
             showDenyButton: true,
             showCancelButton: true,
             cancelButtonColor: 'red',
             denyButtonColor: 'green',
-            confirmButtonText: `Copy`,
-            denyButtonText: `Email`,
+            confirmButtonText: `Copy URL`,
+            denyButtonText: `Email invite`,
             cancelButtonText: `Close`,
             showClass: { popup: 'animate__animated animate__fadeInDown' },
             hideClass: { popup: 'animate__animated animate__fadeOutUp' },
@@ -1635,7 +1532,7 @@ function copyRoomURL() {
     tmpInput.setSelectionRange(0, 99999); // For mobile devices
     navigator.clipboard.writeText(tmpInput.value);
     document.body.removeChild(tmpInput);
-    userLog('info', 'Ссылка на встречу скопирована в буфер 👍', 'top-end');
+    userLog('info', 'Meeting URL copied to clipboard 👍', 'top-end');
 }
 
 function copyToClipboard(txt, showTxt = true) {
@@ -1647,8 +1544,8 @@ function copyToClipboard(txt, showTxt = true) {
     navigator.clipboard.writeText(tmpInput.value);
     document.body.removeChild(tmpInput);
     showTxt
-        ? userLog('info', `${txt} скопировано в буфер 👍`, 'top-end')
-        : userLog('info', `Скопировано в буфер 👍`, 'top-end');
+        ? userLog('info', `${txt} copied to clipboard 👍`, 'top-end')
+        : userLog('info', `Copied to clipboard 👍`, 'top-end');
 }
 
 function shareRoomByEmail() {
@@ -1658,10 +1555,10 @@ function shareRoomByEmail() {
         background: swalBackground,
         imageUrl: image.email,
         position: 'center',
-        title: 'Выберите дату и время',
+        title: 'Select a Date and Time',
         html: '<input type="text" id="datetimePicker" class="flatpickr" />',
         showCancelButton: true,
-        confirmButtonText: 'ОК',
+        confirmButtonText: 'OK',
         cancelButtonColor: 'red',
         showClass: { popup: 'animate__animated animate__fadeInDown' },
         hideClass: { popup: 'animate__animated animate__fadeOutUp' },
@@ -1673,8 +1570,8 @@ function shareRoomByEmail() {
                     ? 'Password: ' + (room_password || rc.RoomPassword) + newLine
                     : '';
             const email = '';
-            const emailSubject = `Пожалуйста, подключитесь к нашей встрече ${BRAND.app.name}`;
-            const emailBody = `Встреча запланирована: ${newLine} Дата и время: ${selectedDateTime} ${newLine}${roomPassword}Ссылка для входа: ${RoomURL} ${newLine}`;
+            const emailSubject = `Please join our ${BRAND.app.name} Video Chat Meeting`;
+            const emailBody = `The meeting is scheduled at: ${newLine} DateTime: ${selectedDateTime} ${newLine}${roomPassword}Click to join: ${RoomURL} ${newLine}`;
             document.location = 'mailto:' + email + '?subject=' + emailSubject + '&body=' + emailBody;
         },
     });
@@ -1754,6 +1651,7 @@ function roomIsReady() {
         hide(tabRecordingBtn);
     }
     BUTTONS.main.chatButton && show(chatButton);
+    BUTTONS.main.participantsButton && show(participantsButton);
     BUTTONS.main.pollButton && show(pollButton);
     BUTTONS.main.editorButton && show(editorButton);
     BUTTONS.main.raiseHandButton && show(raiseHandButton);
@@ -1797,7 +1695,7 @@ function roomIsReady() {
         hide(transcriptionMaxBtn);
         hide(transcriptionMinBtn);
     } else {
-        rc.makeDraggable(emojiPickerContainer, emojiPickerHeader);
+        //rc.makeDraggable(emojiPickerContainer, emojiPickerHeader);
         rc.makeDraggable(chatRoom, chatHeader);
         rc.makeDraggable(pollRoom, pollHeader);
         //rc.makeDraggable(editorRoom, editorHeader);
@@ -1840,11 +1738,14 @@ function roomIsReady() {
     BUTTONS.main.settingsButton && show(settingsButton);
     isAudioAllowed ? show(stopAudioButton) : BUTTONS.main.startAudioButton && show(startAudioButton);
     isVideoAllowed ? show(stopVideoButton) : BUTTONS.main.startVideoButton && show(startVideoButton);
+    BUTTONS.settings.activeRooms && show(activeRoomsButton);
     BUTTONS.settings.fileSharing && show(fileShareButton);
     BUTTONS.settings.lockRoomButton && show(lockRoomButton);
     BUTTONS.settings.broadcastingButton && show(broadcastingButton);
     BUTTONS.settings.lobbyButton && show(lobbyButton);
     BUTTONS.settings.sendEmailInvitation && show(sendEmailInvitation);
+    !BUTTONS.settings.customNoiseSuppression && hide(noiseSuppressionButton);
+    BUTTONS.settings.tabNotificationsBtn && show(tabNotificationsBtn);
     if (rc.recording.recSyncServerRecording) show(roomRecordingServer);
     BUTTONS.main.aboutButton && show(aboutButton);
     if (!isMobileDevice) show(pinUnpinGridDiv);
@@ -1864,6 +1765,7 @@ function roomIsReady() {
     loadSettingsFromLocalStorage();
     startSessionTimer();
     handleButtonsBar();
+    handleDropdownHover();
     checkButtonsBar();
     if (room_password) {
         lockRoomButton.click();
@@ -1874,6 +1776,19 @@ function roomIsReady() {
 // ####################################################
 // UTILS
 // ####################################################
+
+function updateChatEmptyNotice() {
+    const chatLists = [
+        getId('chatGPTMessages'),
+        getId('deepSeekMessages'),
+        getId('chatPublicMessages'),
+        getId('chatPrivateMessages'),
+    ].filter(Boolean);
+    const emptyNotice = getId('chatEmptyNotice');
+    if (!emptyNotice) return;
+    const hasMessages = chatLists.some((ul) => ul.children.length > 0);
+    hasMessages ? emptyNotice.classList.add('hidden') : emptyNotice.classList.remove('hidden');
+}
 
 function elemDisplay(elem, display, mode = 'block') {
     elem = getId(elem);
@@ -1986,6 +1901,7 @@ function startRecordingTimer() {
 }
 function stopRecordingTimer() {
     clearInterval(recTimer);
+    recordingStatus.innerText = '0s';
 }
 
 // ####################################################
@@ -2072,6 +1988,9 @@ function handleButtons() {
     tabAspectBtn.onclick = (e) => {
         rc.openTab(e, 'tabAspect');
     };
+    tabNotificationsBtn.onclick = (e) => {
+        rc.openTab(e, 'tabNotifications');
+    };
     tabModeratorBtn.onclick = (e) => {
         rc.openTab(e, 'tabModerator');
     };
@@ -2086,6 +2005,13 @@ function handleButtons() {
     };
     tabLanguagesBtn.onclick = (e) => {
         rc.openTab(e, 'tabLanguages');
+    };
+    notifyEmailCleanBtn.onclick = () => {
+        rc.cleanNotifications();
+        rc.saveNotifications(false);
+    };
+    saveNotificationsBtn.onclick = () => {
+        rc.saveNotifications();
     };
     tabVideoAIBtn.onclick = (e) => {
         rc.openTab(e, 'tabVideoAI');
@@ -2124,9 +2050,9 @@ function handleButtons() {
     };
     chatButton.onclick = () => {
         rc.toggleChat();
-        if (isMobileDevice) {
-            rc.toggleShowParticipants();
-        }
+    };
+    participantsButton.onclick = async () => {
+        rc.toggleParticipants();
     };
     // Polls
     pollButton.onclick = () => {
@@ -2321,89 +2247,24 @@ function handleButtons() {
             toggleExtraButtons();
         }
     };
-
-    async function handleStartAudioClick() {
+    startAudioButton.onclick = async () => {
         const moderator = rc.getModerator();
         if (moderator.audio_cant_unmute) {
             return userLog('warning', 'The moderator does not allow you to unmute', 'top-end', 6000);
         }
         if (isPushToTalkActive) return;
         setAudioButtonsDisabled(true);
+        if (!isEnumerateAudioDevices) await initEnumerateAudioDevices();
 
-        try {
-            const producerExist = rc.producerExist(RoomClient.mediaType.audio);
-            console.log('START AUDIO producerExist --->', producerExist);
+        const producerExist = rc.producerExist(RoomClient.mediaType.audio);
+        console.log('START AUDIO producerExist --->', producerExist);
 
-            if (producerExist) {
-                await rc.resumeProducer(RoomClient.mediaType.audio);
-                rc.updatePeerInfo(peer_name, socket.id, 'audio', true);
-                return;
-            }
+        producerExist
+            ? await rc.resumeProducer(RoomClient.mediaType.audio)
+            : await rc.produce(RoomClient.mediaType.audio, microphoneSelect.value);
 
-            const stream = await initEnumerateAudioDevices(true, handleStartAudioClick);
-            if (!stream) return;
-            initStream = stream;
-
-            const audioProducer = await rc.produce(
-                RoomClient.mediaType.audio,
-                microphoneSelect.value,
-                false,
-                true
-            );
-
-            if (audioProducer) {
-                rc.updatePeerInfo(peer_name, socket.id, 'audio', true);
-            } else {
-                setAudioButtonsDisabled(false);
-            }
-        } catch (error) {
-            console.error('START AUDIO ERROR', error);
-            setAudioButtonsDisabled(false);
-        } finally {
-            setAudioButtonsDisabled(false);
-        }
-    }
-
-    async function handleStartVideoClick() {
-        const moderator = rc.getModerator();
-        if (moderator.video_cant_unhide) {
-            return userLog('warning', 'The moderator does not allow you to unhide', 'top-end', 6000);
-        }
-        setVideoButtonsDisabled(true);
-
-        try {
-            const producerExist = rc.producerExist(RoomClient.mediaType.video);
-            console.log('START VIDEO producerExist --->', producerExist);
-
-            if (producerExist) {
-                await rc.resumeProducer(RoomClient.mediaType.video);
-                rc.updatePeerInfo(peer_name, socket.id, 'video', true);
-                return;
-            }
-
-            const stream = await initEnumerateVideoDevices(true, handleStartVideoClick);
-            if (!stream) return;
-            initStream = stream;
-
-            const videoProducer = await rc.produce(
-                RoomClient.mediaType.video,
-                videoSelect.value,
-                false,
-                true
-            );
-
-            if (!videoProducer) {
-                setVideoButtonsDisabled(false);
-            }
-            // await rc.resumeProducer(RoomClient.mediaType.video);
-        } catch (error) {
-            console.error('START VIDEO ERROR', error);
-            setVideoButtonsDisabled(false);
-        } finally {
-            setVideoButtonsDisabled(false);
-        }
-    }
-    startAudioButton.onclick = () => handleStartAudioClick();
+        rc.updatePeerInfo(peer_name, socket.id, 'audio', true);
+    };
     stopAudioButton.onclick = async () => {
         if (isPushToTalkActive) return;
         setAudioButtonsDisabled(true);
@@ -2417,11 +2278,20 @@ function handleButtons() {
 
         rc.updatePeerInfo(peer_name, socket.id, 'audio', false);
     };
-    startVideoButton.onclick = () => handleStartVideoClick();
-    stopVideoButton.onclick = async () => {
+    startVideoButton.onclick = async () => {
+        const moderator = rc.getModerator();
+        if (moderator.video_cant_unhide) {
+            return userLog('warning', 'The moderator does not allow you to unhide', 'top-end', 6000);
+        }
         setVideoButtonsDisabled(true);
-        await rc.pauseProducer(RoomClient.mediaType.video);
-        rc.updatePeerInfo(peer_name, socket.id, 'video', false);
+        if (!isEnumerateVideoDevices) await initEnumerateVideoDevices();
+        await rc.produce(RoomClient.mediaType.video, videoSelect.value);
+        // await rc.resumeProducer(RoomClient.mediaType.video);
+    };
+    stopVideoButton.onclick = () => {
+        setVideoButtonsDisabled(true);
+        rc.closeProducer(RoomClient.mediaType.video);
+        // await rc.pauseProducer(RoomClient.mediaType.video);
     };
     startScreenButton.onclick = async () => {
         const moderator = rc.getModerator();
@@ -2454,6 +2324,9 @@ function handleButtons() {
     };
     stopRtmpURLButton.onclick = () => {
         rc.stopRTMPfromURL();
+    };
+    activeRoomsButton.onclick = () => {
+        rc.showActiveRooms();
     };
     fileShareButton.onclick = () => {
         rc.selectFileToShare(socket.id, true);
@@ -2488,6 +2361,9 @@ function handleButtons() {
     whiteboardPencilBtn.onclick = () => {
         whiteboardIsDrawingMode(true);
     };
+    whiteboardVanishingBtn.onclick = () => {
+        whiteboardIsVanishingMode(true);
+    };
     whiteboardObjectBtn.onclick = () => {
         whiteboardIsDrawingMode(false);
     };
@@ -2512,6 +2388,9 @@ function handleButtons() {
     whiteboardTextBtn.onclick = () => {
         whiteboardAddObj('text');
     };
+    whiteboardStickyNoteBtn.onclick = () => {
+        whiteboardAddObj('stickyNote');
+    };
     whiteboardLineBtn.onclick = () => {
         whiteboardAddObj('line');
     };
@@ -2529,6 +2408,9 @@ function handleButtons() {
     };
     whiteboardCleanBtn.onclick = () => {
         confirmClearBoard();
+    };
+    whiteboardShortcutsBtn.onclick = () => {
+        showWhiteboardShortcuts();
     };
     whiteboardCloseBtn.onclick = () => {
         whiteboardAction(getWhiteboardAction('close'));
@@ -2682,73 +2564,37 @@ async function changeCamera(deviceId) {
         elemDisplay('initVideo', true);
         initVideoContainerShow();
     }
-
-    const baseConstraints = {
+    const videoConstraints = {
         audio: false,
         video: {
             width: { ideal: 1280 },
             height: { ideal: 720 },
+            deviceId: { exact: deviceId },
             aspectRatio: 1.777,
         },
     };
-
-    if (deviceId) {
-        baseConstraints.video.deviceId = { exact: deviceId };
-    }
-
-    try {
-        const camStream = await getUserMediaWithTimeout(baseConstraints);
-        updateInitVideoStream(camStream);
-    } catch (err) {
-        console.error('Error accessing init video device', err);
-        console.warn('Fallback to default constraints');
-
-        const fallbackConstraints = {
-            audio: false,
-            video: deviceId ? { deviceId: { exact: deviceId } } : true,
-        };
-
-        try {
-            const camStream = await getUserMediaWithTimeout(fallbackConstraints);
-            updateInitVideoStream(camStream);
-        } catch (fallbackErr) {
-            reloadBrowser(fallbackErr);
-            return;
-        }
-    }
+    await navigator.mediaDevices
+        .getUserMedia(videoConstraints)
+        .then(async (camStream) => {
+            initVideo.srcObject = camStream;
+            initStream = camStream;
+            console.log(
+                '04.5 ----> Success attached init cam video stream',
+                initStream.getVideoTracks()[0].getSettings()
+            );
+            checkInitConfig();
+            camera = detectCameraFacingMode(camStream);
+            handleCameraMirror(initVideo);
+            isInitVideoLoaded = true;
+        })
+        .catch((error) => {
+            console.error('[Error] changeCamera', error);
+            handleMediaError('video/audio', error, '/');
+            isInitVideoLoaded = false;
+        });
 
     if (isVideoAllowed) {
         await loadVirtualBackgroundSettings();
-    }
-
-    function updateInitVideoStream(camStream) {
-        if (!camStream) return;
-
-        initVideo.srcObject = camStream;
-        initStream = camStream;
-
-        const videoTrack = initStream.getVideoTracks()[0];
-        const videoSettings = videoTrack ? videoTrack.getSettings() : undefined;
-        console.log('04.5 ----> Success attached init cam video stream', videoSettings);
-
-        checkInitConfig();
-        camera = detectCameraFacingMode(camStream);
-        handleCameraMirror(initVideo);
-    }
-
-    function reloadBrowser(err) {
-        console.error('[Error] changeCamera fallback failed', err);
-        if (initVideoSelect) initVideoSelect.selectedIndex = 0;
-        if (videoSelect) videoSelect.selectedIndex = 0;
-        try {
-            refreshLsDevices();
-        } catch (refreshError) {
-            console.warn('Unable to refresh local storage devices after camera error', refreshError);
-        }
-        setTimeout(() => {
-            location.reload();
-        }, 3000);
-        handleMediaError('video', err, '/');
     }
 }
 
@@ -2771,79 +2617,63 @@ function detectCameraFacingMode(stream) {
 function handleMediaError(mediaType, err, redirectURL = false) {
     sound('alert');
 
-    let normalizedMediaType = 'media';
-    if (typeof mediaType === 'string') {
-        switch (mediaType) {
-            case 'screen':
-            case 'screenType':
-                normalizedMediaType = 'screen sharing';
-                break;
-            case 'video':
-            case 'videoType':
-            case 'cameraType':
-                normalizedMediaType = 'video';
-                break;
-            case 'audio':
-            case 'audioType':
-            case 'audioTab':
-                normalizedMediaType = 'audio';
-                break;
-            default:
-                normalizedMediaType = mediaType;
-                break;
-        }
-    }
-    const errorName = err?.name || 'UnknownError';
-    let errorMessage = err?.message || err || 'Unknown error';
-    let hasGetUserMediaError = true;
+    let errMessage = err;
+    let getUserMediaError = true;
 
-    switch (errorName) {
+    switch (err.name) {
         case 'NotFoundError':
         case 'DevicesNotFoundError':
-            errorMessage = 'Необходимая дорожка отсутствует';
+            errMessage = 'Required track is missing';
             break;
         case 'NotReadableError':
         case 'TrackStartError':
-            errorMessage = 'Устройство уже используется';
+            errMessage = 'Already in use';
             break;
         case 'OverconstrainedError':
         case 'ConstraintNotSatisfiedError':
-            errorMessage = 'Доступные устройства не удовлетворяют ограничениям';
+            errMessage = 'Constraints cannot be satisfied by available devices';
             if (videoQuality.selectedIndex != 0) {
                 videoQuality.selectedIndex = rc.videoQualitySelectedIndex;
             }
             break;
         case 'NotAllowedError':
         case 'PermissionDeniedError':
-            errorMessage = 'Доступ запрещён в браузере';
+            errMessage = 'Permission denied in browser';
             break;
         case 'TypeError':
-            errorMessage = 'Пустой объект ограничений';
+            errMessage = 'Empty constraints object';
             break;
         default:
-            hasGetUserMediaError = false;
+            getUserMediaError = false;
             break;
+    }
+
+    if (mediaType === 'screenType' && err.name === 'NotAllowedError') {
+        console.warn('User cancelled the screen sharing prompt');
+        return;
     }
 
     let html = `
-        <ul style="text-align: left">
-            <li>Тип медиа: ${normalizedMediaType}</li>
-            <li>Название ошибки: ${errorName}</li>
-            <li>Сообщение об ошибке: <p style=\"color: red\">${errorMessage}</p></li>`;
+    <ul style="text-align: left">
+        <li>Media type: ${mediaType}</li>
+        <li>Error name: ${err.name}</li>
+        <li>
+            <p>Error message:</p>
+            <p style="color: red">${errMessage}</p>
+        </li>`;
 
-    if (hasGetUserMediaError) {
+    if (getUserMediaError) {
         html += `
-            <li>Частые: <a href="https://blog.addpipe.com/common-getusermedia-errors" target="_blank">ошибки getUserMedia</a></li>`;
+        <li>Common: <a href="https://blog.addpipe.com/common-getusermedia-errors" target="_blank">getUserMedia errors</a></li>`;
     }
-
     html += `
         </ul>
     `;
 
-    popupHtmlMessage(null, image.forbidden, 'Доступ запрещён', html, 'center', redirectURL);
+    popupHtmlMessage(null, image.forbidden, 'Access denied', html, 'center', redirectURL);
 
     throw new Error(
-        `Доступ к устройству ${normalizedMediaType} запрещён [${errorName}]: ${errorMessage}. См. типичные ошибки getUserMedia: https://blog.addpipe.com/common-getusermedia-errors/`
+        `Access denied for ${mediaType} device [${err.name}]: ${errMessage} check the common getUserMedia errors: https://blog.addpipe.com/common-getusermedia-errors/`
     );
 }
 
@@ -2970,14 +2800,7 @@ function handleSelects() {
             console.log('Push-to-talk: start audio producer');
             setAudioButtonsDisabled(true);
             if (!isEnumerateAudioDevices) initEnumerateAudioDevices();
-            const pttProducer = await rc.produce(
-                RoomClient.mediaType.audio,
-                microphoneSelect.value
-            );
-            if (!pttProducer) {
-                setAudioButtonsDisabled(false);
-                return;
-            }
+            await rc.produce(RoomClient.mediaType.audio, microphoneSelect.value);
             setTimeout(async function () {
                 await rc.pauseProducer(RoomClient.mediaType.audio);
                 rc.updatePeerInfo(peer_name, socket.id, 'audio', false);
@@ -3084,7 +2907,9 @@ function handleSelects() {
         e.target.blur();
     };
     BtnAspectRatio.onchange = () => {
-        setAspectRatio(BtnAspectRatio.value);
+        adaptAspectRatio(videoMediaContainer.childElementCount);
+        localStorageSettings.aspect_ratio = BtnAspectRatio.selectedIndex;
+        lS.setSettings(localStorageSettings);
     };
     BtnVideoObjectFit.onchange = () => {
         rc.handleVideoObjectFit(BtnVideoObjectFit.value);
@@ -3146,6 +2971,9 @@ function handleSelects() {
     whiteboardGhostButton.onclick = (e) => {
         wbIsBgTransparent = !wbIsBgTransparent;
         wbIsBgTransparent ? wbCanvasBackgroundColor('rgba(0, 0, 0, 0.100)') : setTheme();
+        if (BUTTONS.main.extraButton) {
+            wbIsBgTransparent ? hide(toggleExtraButton) : show(toggleExtraButton);
+        }
     };
     whiteboardGridBtn.onclick = (e) => {
         toggleCanvasGrid();
@@ -3511,6 +3339,14 @@ function handleUsernameEmojiPicker() {
         getId('usernameInput').value += data.native;
         toggleUsernameEmoji();
     }
+
+    const initUsernameEmojiButton = getId('initUsernameEmojiButton');
+    const usernameEmoji = getId('usernameEmoji');
+    handleClickOutside(emojiUsernamePicker, initUsernameEmojiButton, () => {
+        if (usernameEmoji && !usernameEmoji.classList.contains('hidden')) {
+            usernameEmoji.classList.add('hidden');
+        }
+    });
 }
 
 function handleChatEmojiPicker() {
@@ -3525,24 +3361,123 @@ function handleChatEmojiPicker() {
         chatMessage.value += data.native;
         rc.toggleChatEmoji();
     }
+
+    const chatEmojiButton = getId('chatEmojiButton');
+    const chatEmoji = getId('chatEmoji');
+    handleClickOutside(emojiPicker, chatEmojiButton, () => {
+        if (chatEmoji && chatEmoji.classList.contains('show')) {
+            chatEmoji.classList.remove('show');
+            chatEmojiButton.style.color = '#FFFFFF';
+        }
+    });
 }
 
 function handleRoomEmojiPicker() {
+    const soundEmojis = [
+        { emoji: '👍', shortcodes: ':+1:' },
+        { emoji: '👎', shortcodes: ':-1:' },
+        { emoji: '👌', shortcodes: ':ok_hand:' },
+        { emoji: '😀', shortcodes: ':grinning:' },
+        { emoji: '😃', shortcodes: ':smiley:' },
+        { emoji: '😂', shortcodes: ':joy:' },
+        { emoji: '😘', shortcodes: ':kissing_heart:' },
+        { emoji: '❤️', shortcodes: ':heart:' },
+        { emoji: '🎺', shortcodes: ':trumpet:' },
+        { emoji: '🎉', shortcodes: ':tada:' },
+        { emoji: '😮', shortcodes: ':open_mouth:' },
+        { emoji: '👏', shortcodes: ':clap:' },
+        { emoji: '✨', shortcodes: ':sparkles:' },
+        { emoji: '⭐', shortcodes: ':star:' },
+        { emoji: '🌟', shortcodes: ':star2:' },
+        { emoji: '💫', shortcodes: ':dizzy:' },
+        { emoji: '🚀', shortcodes: ':rocket:' },
+    ];
+
+    const header = document.createElement('div');
+    header.className = 'room-emoji-header';
+
+    const title = document.createElement('span');
+    title.textContent = 'Emoji Picker';
+    title.className = 'room-emoji-title';
+
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'room-emoji-close-btn';
+    closeBtn.innerHTML = '<i class="fa fa-times"></i>';
+
+    header.appendChild(title);
+    header.appendChild(closeBtn);
+
+    const tabContainer = document.createElement('div');
+    tabContainer.className = 'room-emoji-tab-container';
+
+    const allTab = document.createElement('button');
+    allTab.textContent = 'All';
+    allTab.className = 'room-emoji-tab active';
+
+    const soundTab = document.createElement('button');
+    soundTab.textContent = 'Sounds';
+    soundTab.className = 'room-emoji-tab';
+
+    tabContainer.appendChild(allTab);
+    tabContainer.appendChild(soundTab);
+
+    const emojiMartDiv = document.createElement('div');
+    emojiMartDiv.className = 'room-emoji-mart';
     const pickerRoomOptions = {
         theme: 'dark',
         onEmojiSelect: sendEmojiToRoom,
     };
-
     const emojiRoomPicker = new EmojiMart.Picker(pickerRoomOptions);
-    emojiPickerContainer.appendChild(emojiRoomPicker);
+    emojiMartDiv.appendChild(emojiRoomPicker);
+
+    const emojiGrid = document.createElement('div');
+    emojiGrid.className = 'room-emoji-grid';
+
+    function showEmojiGrid() {
+        emojiGrid.classList.add('visible');
+    }
+    function hideEmojiGrid() {
+        emojiGrid.classList.remove('visible');
+    }
+
+    soundEmojis.forEach(({ emoji, shortcodes }) => {
+        const btn = document.createElement('button');
+        btn.textContent = emoji;
+        btn.className = 'room-emoji-btn';
+        btn.onclick = () => sendEmojiToRoom({ native: emoji, shortcodes });
+        emojiGrid.appendChild(btn);
+    });
+
+    allTab.onclick = () => {
+        allTab.classList.add('active');
+        soundTab.classList.remove('active');
+        emojiMartDiv.style.display = 'block';
+        hideEmojiGrid();
+    };
+    soundTab.onclick = () => {
+        soundTab.classList.add('active');
+        allTab.classList.remove('active');
+        emojiMartDiv.style.display = 'none';
+        showEmojiGrid();
+    };
+
+    emojiPickerContainer.innerHTML = '';
+    emojiPickerContainer.appendChild(header);
+    emojiPickerContainer.appendChild(tabContainer);
+    emojiPickerContainer.appendChild(emojiMartDiv);
+    emojiPickerContainer.appendChild(emojiGrid);
     emojiPickerContainer.style.display = 'none';
+
+    if (!isMobileDevice) {
+        rc.makeDraggable(emojiPickerContainer, header);
+    }
 
     emojiRoomButton.onclick = () => {
         toggleEmojiPicker();
     };
-    closeEmojiPickerContainer.onclick = () => {
+    closeBtn.addEventListener('click', (e) => {
         toggleEmojiPicker();
-    };
+    });
 
     function sendEmojiToRoom(data) {
         console.log('Selected Emoji', data.native);
@@ -3649,6 +3584,7 @@ function loadSettingsFromLocalStorage() {
     screenOptimization.selectedIndex = localStorageSettings.screen_optimization;
     videoFps.selectedIndex = localStorageSettings.video_fps;
     screenFps.selectedIndex = localStorageSettings.screen_fps;
+    BtnAspectRatio.selectedIndex = localStorageSettings.aspect_ratio;
     BtnVideoObjectFit.selectedIndex = localStorageSettings.video_obj_fit;
     BtnVideoControls.selectedIndex = localStorageSettings.video_controls;
     BtnsBarPosition.selectedIndex = localStorageSettings.buttons_bar;
@@ -3910,7 +3846,13 @@ function handleRoomClientEvents() {
 // UTILITY
 // ####################################################
 
-function leaveRoom(allowCancel = true) {
+async function leaveRoom(allowCancel = true) {
+    if (rc.isRecording() || recordingStatus.innerText != '0s') {
+        recShowInfo = false;
+        rc.saveRecording('User is leaving the room, saving recording before exit');
+        rc.popupRecordingOnLeaveRoom();
+        return;
+    }
     survey && survey.enabled ? leaveFeedback(allowCancel) : redirectOnLeave();
 }
 
@@ -3926,11 +3868,11 @@ function leaveFeedback(allowCancel) {
         background: swalBackground,
         imageUrl: image.feedback,
         position: 'top',
-        title: 'Оставьте отзыв',
-        text: 'Хотите оценить свой опыт использования Kremlevka?',
-        confirmButtonText: `Да`,
-        denyButtonText: `Нет`,
-        cancelButtonText: `Отмена`,
+        title: 'Leave a feedback',
+        text: 'Do you want to rate your MiroTalk experience?',
+        confirmButtonText: `Yes`,
+        denyButtonText: `No`,
+        cancelButtonText: `Cancel`,
         showClass: { popup: 'animate__animated animate__fadeInDown' },
         hideClass: { popup: 'animate__animated animate__fadeOutUp' },
     }).then((result) => {
@@ -3946,7 +3888,7 @@ function leaveFeedback(allowCancel) {
 function redirectOnLeave() {
     endRoomSession();
     rc.exitRoom();
-    redirect && redirect.enabled ? openURL(redirect.url) : openURL('/');
+    redirect && redirect.enabled ? openURL(redirect.url) : openURL('/newroom');
 }
 
 function userLog(icon, message, position, timer = 3000) {
@@ -4025,10 +3967,51 @@ function handleButtonsBar() {
         : document.body.addEventListener('touchstart', showButtonsHandler);
 }
 
+function handleDropdownHover(dropdownElement = null) {
+    const supportsHover = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+    if (!supportsHover) return;
+
+    const dropdowns = dropdownElement ? dropdownElement : document.querySelectorAll('.dropdown');
+    console.log(`Dropdown found: ${dropdowns.length}`);
+
+    dropdowns.forEach((dropdown) => {
+        const toggle = dropdown.querySelector('.dropdown-toggle');
+        const menu = dropdown.querySelector('.dropdown-menu');
+
+        if (!toggle || !menu) return;
+
+        let timeoutId;
+
+        dropdown.addEventListener('mouseenter', () => {
+            clearTimeout(timeoutId);
+            const bsDropdown = bootstrap.Dropdown.getInstance(toggle) || new bootstrap.Dropdown(toggle);
+            bsDropdown.show();
+        });
+
+        dropdown.addEventListener('mouseleave', () => {
+            timeoutId = setTimeout(() => {
+                const bsDropdown = bootstrap.Dropdown.getInstance(toggle);
+                if (bsDropdown) {
+                    bsDropdown.hide();
+                }
+            }, 200);
+        });
+
+        menu.addEventListener('mouseenter', () => {
+            clearTimeout(timeoutId);
+        });
+
+        toggle.addEventListener('click', (e) => {
+            e.stopPropagation();
+        });
+    });
+}
+
 function showButtons() {
     if (
         isButtonsBarOver ||
         isButtonsVisible ||
+        rc.isVideoBarDropDownOpen ||
         (isMobileDevice && rc.isChatOpen) ||
         (isMobileDevice && rc.isMySettingsOpen)
     )
@@ -4039,10 +4022,19 @@ function showButtons() {
 }
 
 function checkButtonsBar() {
-    control.style.display = 'flex';
-    toggleExtraButton.innerHTML = icons.up;
-    bottomButtons.style.display = 'flex';
-    isButtonsVisible = true;
+    if (localStorageSettings.keep_buttons_visible) {
+        control.style.display = 'flex';
+        toggleExtraButton.innerHTML = icons.up;
+        bottomButtons.style.display = 'flex';
+        isButtonsVisible = true;
+    } else {
+        if (!isButtonsBarOver) {
+            control.style.display = 'none';
+            toggleExtraButton.innerHTML = icons.up;
+            bottomButtons.style.display = 'none';
+            isButtonsVisible = false;
+        }
+    }
     setTimeout(() => {
         checkButtonsBar();
     }, 10000);
@@ -4069,7 +4061,17 @@ function hideClassElements(className) {
 function setCamerasBorderNone() {
     const cameras = rc.getEcN('Camera');
     for (let i = 0; i < cameras.length; i++) {
-        cameras[i].style.border = 'none';
+        cameras[i].style.setProperty('border', 'none', 'important');
+    }
+}
+
+function hideVideoMenuBar(videoBarId) {
+    const videoMenuBar = rc.getEcN('videoMenuBar');
+    for (let i = 0; i < videoMenuBar.length; i++) {
+        const menuBar = videoMenuBar[i];
+        if (menuBar.id != videoBarId) {
+            hide(menuBar);
+        }
     }
 }
 
@@ -4108,6 +4110,11 @@ async function sound(name, force = false) {
     } catch (err) {
         return false;
     }
+}
+
+function isValidEmail(email) {
+    const emailRegex = /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i;
+    return emailRegex.test(email);
 }
 
 async function isImageURL(url) {
@@ -4177,6 +4184,22 @@ function isHtml(str) {
     return false;
 }
 
+function handleClickOutside(targetElement, triggerElement, callback, minWidth = 0) {
+    document.addEventListener('click', (e) => {
+        if (minWidth && window.innerWidth > minWidth) return;
+        let el = e.target;
+        let shouldExclude = false;
+        while (el) {
+            if (el instanceof HTMLElement && (el === targetElement || el === triggerElement)) {
+                shouldExclude = true;
+                break;
+            }
+            el = el.parentElement;
+        }
+        if (!shouldExclude) callback();
+    });
+}
+
 function getId(id) {
     return document.getElementById(id);
 }
@@ -4195,12 +4218,16 @@ function toggleWhiteboard() {
 function whiteboardCenter() {
     whiteboard.style.top = '50%';
     whiteboard.style.left = '50%';
+    whiteboard.style.transform = 'translate(-50%, -50%)';
 }
 
 function setupWhiteboard() {
     setupWhiteboardCanvas();
     setupWhiteboardCanvasSize();
-    setupWhiteboardLocalListners();
+    setupWhiteboardLocalListeners();
+    setupWhiteboardShortcuts();
+    setupWhiteboardDragAndDrop();
+    setupWhiteboardResizeListener();
 }
 
 function setupWhiteboardCanvas() {
@@ -4211,18 +4238,30 @@ function setupWhiteboardCanvas() {
 }
 
 function setupWhiteboardCanvasSize() {
-    const optimalSize = [wbWidth, wbHeight];
-    const scaleFactorX = window.innerWidth / optimalSize[0];
-    const scaleFactorY = window.innerHeight / optimalSize[1];
-    const scaleFactor = Math.min(scaleFactorX, scaleFactorY, 1);
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
 
-    const newWidth = optimalSize[0] * scaleFactor;
-    const newHeight = optimalSize[1] * scaleFactor;
+    const containerPadding = isMobileDevice ? 10 : 20;
+    const headerHeight = isMobileDevice ? 40 : 60;
+    const extraMargin = 20;
 
-    wbCanvas.setWidth(newWidth);
-    wbCanvas.setHeight(newHeight);
-    wbCanvas.setZoom(scaleFactor);
-    setWhiteboardSize(newWidth, newHeight);
+    const availableWidth = viewportWidth - containerPadding - extraMargin;
+    const availableHeight = viewportHeight - containerPadding - headerHeight - extraMargin;
+
+    const scaleX = availableWidth / wbReferenceWidth;
+    const scaleY = availableHeight / wbReferenceHeight;
+    const scale = Math.min(scaleX, scaleY);
+
+    const canvasWidth = wbReferenceWidth * scale;
+    const canvasHeight = wbReferenceHeight * scale;
+
+    wbCanvas.setWidth(canvasWidth);
+    wbCanvas.setHeight(canvasHeight);
+    wbCanvas.setZoom(scale);
+
+    setWhiteboardSize(canvasWidth + containerPadding, canvasHeight + headerHeight + containerPadding);
+
+    whiteboardCenter();
 
     wbCanvas.calcOffset();
     wbCanvas.renderAll();
@@ -4233,9 +4272,29 @@ function setWhiteboardSize(w, h) {
     document.documentElement.style.setProperty('--wb-height', h);
 }
 
+function setupWhiteboardResizeListener() {
+    let resizeTimer;
+    window.addEventListener('resize', () => {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(() => {
+            if (wbCanvas && wbIsOpen) {
+                setupWhiteboardCanvasSize();
+            }
+        }, 250);
+    });
+    window.addEventListener('orientationchange', () => {
+        setTimeout(() => {
+            if (wbCanvas && wbIsOpen) {
+                setupWhiteboardCanvasSize();
+            }
+        }, 300);
+    });
+}
+
 function drawCanvasGrid() {
-    const width = wbCanvas.getWidth();
-    const height = wbCanvas.getHeight();
+    // Use reference dimensions for grid, zoom will handle scaling
+    const width = wbReferenceWidth;
+    const height = wbReferenceHeight;
 
     removeCanvasGrid();
 
@@ -4253,6 +4312,7 @@ function drawCanvasGrid() {
     wbCanvas.add(gridGroup);
     gridGroup.sendToBack();
     wbCanvas.renderAll();
+    setColor(whiteboardGridBtn, 'green');
 }
 
 function createGridLine(x1, y1, x2, y2) {
@@ -4270,6 +4330,7 @@ function removeCanvasGrid() {
     });
     wbGridLines = [];
     wbCanvas.renderAll();
+    setColor(whiteboardGridBtn, 'white');
 }
 
 function toggleCanvasGrid() {
@@ -4291,12 +4352,29 @@ function whiteboardIsDrawingMode(status) {
     wbCanvas.isDrawingMode = status;
     if (status) {
         setColor(whiteboardPencilBtn, 'green');
+        setColor(whiteboardVanishingBtn, 'white');
+        setColor(whiteboardObjectBtn, 'white');
+        setColor(whiteboardEraserBtn, 'white');
+        wbIsEraser = false;
+        wbIsVanishing = false;
+    } else {
+        setColor(whiteboardPencilBtn, 'white');
+        setColor(whiteboardVanishingBtn, 'white');
+        setColor(whiteboardObjectBtn, 'green');
+    }
+}
+
+function whiteboardIsVanishingMode(status) {
+    wbCanvas.isDrawingMode = status;
+    wbIsVanishing = status;
+    if (status) {
+        setColor(whiteboardVanishingBtn, 'green');
+        setColor(whiteboardPencilBtn, 'white');
         setColor(whiteboardObjectBtn, 'white');
         setColor(whiteboardEraserBtn, 'white');
         wbIsEraser = false;
     } else {
-        setColor(whiteboardPencilBtn, 'white');
-        setColor(whiteboardObjectBtn, 'green');
+        setColor(whiteboardVanishingBtn, 'white');
     }
 }
 
@@ -4311,10 +4389,10 @@ function whiteboardAddObj(type) {
         case 'imgUrl':
             Swal.fire({
                 background: swalBackground,
-                title: 'URL изображения',
+                title: 'Image URL',
                 input: 'text',
                 showCancelButton: true,
-                confirmButtonText: 'ОК',
+                confirmButtonText: 'OK',
                 showClass: { popup: 'animate__animated animate__fadeInDown' },
                 hideClass: { popup: 'animate__animated animate__fadeOutUp' },
             }).then((result) => {
@@ -4325,16 +4403,16 @@ function whiteboardAddObj(type) {
                             addWbCanvasObj(myImg);
                         });
                     } else {
-                        userLog('error', 'Этот URL не содержит допустимое изображение', 'top-end');
+                        userLog('error', 'The URL is not a valid image', 'top-end');
                     }
                 }
             });
             break;
         case 'imgFile':
-            setupFileSelection('Выберите изображение', wbImageInput, renderImageToCanvas);
+            setupFileSelection('Select the image', wbImageInput, renderImageToCanvas);
             break;
         case 'pdfFile':
-            setupFileSelection('Выберите PDF', wbPdfInput, renderPdfToCanvas);
+            setupFileSelection('Select the PDF', wbPdfInput, renderPdfToCanvas);
             break;
         case 'text':
             const text = new fabric.IText('Lorem Ipsum', {
@@ -4346,6 +4424,9 @@ function whiteboardAddObj(type) {
                 stroke: wbCanvas.freeDrawingBrush.color,
             });
             addWbCanvasObj(text);
+            break;
+        case 'stickyNote':
+            createStickyNote();
             break;
         case 'line':
             const line = new fabric.Line([50, 100, 200, 200], {
@@ -4395,6 +4476,175 @@ function whiteboardAddObj(type) {
     }
 }
 
+function whiteboardEraseObject() {
+    if (wbCanvas && typeof wbCanvas.getActiveObjects === 'function') {
+        const activeObjects = wbCanvas.getActiveObjects();
+        if (activeObjects && activeObjects.length > 0) {
+            // Remove all selected objects
+            activeObjects.forEach((obj) => {
+                wbCanvas.remove(obj);
+            });
+            wbCanvas.discardActiveObject();
+            wbCanvas.requestRenderAll();
+            wbCanvasToJson();
+        }
+    }
+}
+
+function whiteboardCloneObject() {
+    if (wbCanvas && typeof wbCanvas.getActiveObjects === 'function') {
+        const activeObjects = wbCanvas.getActiveObjects();
+        if (activeObjects && activeObjects.length > 0) {
+            activeObjects.forEach((obj, idx) => {
+                obj.clone((cloned) => {
+                    // Offset each clone for visibility
+                    cloned.set({
+                        left: obj.left + 30 + idx * 10,
+                        top: obj.top + 30 + idx * 10,
+                        evented: true,
+                    });
+                    wbCanvas.add(cloned);
+                    wbCanvas.setActiveObject(cloned);
+                    wbCanvasToJson();
+                });
+            });
+            wbCanvas.requestRenderAll();
+        }
+    }
+}
+
+function wbHandleVanishingObjects() {
+    if (wbIsVanishing && wbCanvas._objects.length > 0) {
+        const obj = wbCanvas._objects[wbCanvas._objects.length - 1];
+        if (obj && obj.type === 'path') {
+            wbVanishingObjects.push(obj);
+            const fadeDuration = 1000,
+                vanishTimeout = 5000;
+            setTimeout(() => {
+                const start = performance.now();
+                function fade(ts) {
+                    const p = Math.min((ts - start) / fadeDuration, 1);
+                    obj.set('opacity', 1 - p);
+                    wbCanvas.requestRenderAll();
+                    if (p < 1) requestAnimationFrame(fade);
+                }
+                requestAnimationFrame(fade);
+            }, vanishTimeout - fadeDuration);
+            setTimeout(() => {
+                wbCanvas.remove(obj);
+                wbCanvas.renderAll();
+                wbCanvasToJson();
+                wbVanishingObjects.splice(wbVanishingObjects.indexOf(obj), 1);
+            }, vanishTimeout);
+        }
+    }
+}
+
+function createStickyNote() {
+    Swal.fire({
+        background: swalBackground,
+        title: 'Create Sticky Note',
+        html: `
+        <div class="sticky-note-form">
+            <textarea id="stickyNoteText" class="sticky-note-textarea" rows="4" placeholder="Type your note here...">Note</textarea>
+            <div class="sticky-note-colors-row">
+                <div class="sticky-note-color-group">
+                    <label for="stickyNoteColor" class="sticky-note-color-label">
+                        <i class="fas fa-palette"></i> Background
+                    </label>
+                    <input id="stickyNoteColor" type="color" value="#FFEB3B" class="sticky-note-color-input">
+                </div>
+                <div class="sticky-note-color-group">
+                    <label for="stickyNoteTextColor" class="sticky-note-color-label">
+                        <i class="fas fa-font"></i> Text
+                    </label>
+                    <input id="stickyNoteTextColor" type="color" value="#000000" class="sticky-note-color-input">
+                </div>
+            </div>
+        </div>
+        `,
+        showCancelButton: true,
+        confirmButtonText: 'Create',
+        cancelButtonText: 'Cancel',
+        showClass: { popup: 'animate__animated animate__fadeInDown' },
+        hideClass: { popup: 'animate__animated animate__fadeOutUp' },
+        preConfirm: () => {
+            return {
+                text: getId('stickyNoteText').value,
+                color: getId('stickyNoteColor').value,
+                textColor: getId('stickyNoteTextColor').value,
+            };
+        },
+        didOpen: () => {
+            // Focus textarea for quick typing
+            setTimeout(() => {
+                getId('stickyNoteText').focus();
+            }, 100);
+        },
+    }).then((result) => {
+        if (result.isConfirmed) {
+            const noteData = result.value;
+
+            // Create sticky note background (rectangle)
+            const noteRect = new fabric.Rect({
+                left: 100,
+                top: 100,
+                width: 220,
+                height: 160,
+                fill: noteData.color,
+                shadow: 'rgba(0,0,0,0.18) 0px 4px 12px',
+                rx: 14,
+                ry: 14,
+            });
+
+            // Create text for sticky note
+            const noteText = new fabric.Textbox(noteData.text, {
+                left: 110,
+                top: 110,
+                width: 200,
+                fontSize: 18,
+                fontFamily: 'Segoe UI, Arial, sans-serif',
+                fill: noteData.textColor,
+                textAlign: 'left',
+                editable: true,
+                fontWeight: 'bold',
+                shadow: new fabric.Shadow({
+                    color: 'rgba(255,255,255,0.18)',
+                    blur: 2,
+                    offsetX: 1,
+                    offsetY: 1,
+                }),
+                padding: 8,
+                cornerSize: 8,
+            });
+
+            // Group rectangle and text together
+            const stickyNoteGroup = new fabric.Group([noteRect, noteText], {
+                left: 100,
+                top: 100,
+                selectable: true,
+                hasControls: true,
+                hoverCursor: 'pointer',
+            });
+
+            // Make the text editable by handling double-click events
+            stickyNoteGroup.on('mousedblclick', function () {
+                noteText.enterEditing();
+                noteText.hiddenTextarea && noteText.hiddenTextarea.focus();
+            });
+
+            // Exit editing when clicking outside the noteText
+            wbCanvas.on('mouse:down', function (e) {
+                if (noteText.isEditing && e.target !== noteText) {
+                    noteText.exitEditing();
+                }
+            });
+
+            addWbCanvasObj(stickyNoteGroup);
+        }
+    });
+}
+
 function setupFileSelection(title, accept, renderToCanvas) {
     Swal.fire({
         allowOutsideClick: false,
@@ -4404,7 +4654,7 @@ function setupFileSelection(title, accept, renderToCanvas) {
         input: 'file',
         html: `
         <div id="dropArea">
-            <p>Перетащите файл сюда</p>
+            <p>Drag and drop your file here</p>
         </div>
         `,
         inputAttributes: {
@@ -4419,8 +4669,8 @@ function setupFileSelection(title, accept, renderToCanvas) {
             dropArea.addEventListener('drop', handleDrop);
         },
         showDenyButton: true,
-        confirmButtonText: `ОК`,
-        denyButtonText: `Отмена`,
+        confirmButtonText: `OK`,
+        denyButtonText: `Cancel`,
         showClass: { popup: 'animate__animated animate__fadeInDown' },
         hideClass: { popup: 'animate__animated animate__fadeOutUp' },
     }).then((result) => {
@@ -4565,7 +4815,7 @@ function addWbCanvasObj(obj) {
     }
 }
 
-function setupWhiteboardLocalListners() {
+function setupWhiteboardLocalListeners() {
     wbCanvas.on('mouse:down', function (e) {
         mouseDown(e);
     });
@@ -4583,6 +4833,9 @@ function setupWhiteboardLocalListners() {
 function mouseDown(e) {
     wbIsDrawing = true;
     if (wbIsEraser && e.target) {
+        if (!wbVanishingObjects.includes(e.target)) {
+            wbPop.push(e.target); // To allow redo
+        }
         wbCanvas.remove(e.target);
         return;
     }
@@ -4606,6 +4859,7 @@ function mouseMove() {
 function objectAdded() {
     if (!wbIsRedoing) wbPop = [];
     wbIsRedoing = false;
+    wbHandleVanishingObjects();
 }
 
 function wbCanvasBackgroundColor(color) {
@@ -4617,7 +4871,10 @@ function wbCanvasBackgroundColor(color) {
 
 function wbCanvasUndo() {
     if (wbCanvas._objects.length > 0) {
-        wbPop.push(wbCanvas._objects.pop());
+        const obj = wbCanvas._objects.pop();
+        if (!wbVanishingObjects.includes(obj)) {
+            wbPop.push(obj);
+        }
         wbCanvas.renderAll();
     }
 }
@@ -4627,6 +4884,11 @@ function wbCanvasRedo() {
         wbIsRedoing = true;
         wbCanvas.add(wbPop.pop());
     }
+}
+
+function wbCanvasClear() {
+    wbCanvas.clear();
+    wbCanvas.renderAll();
 }
 
 function wbCanvasSaveImg() {
@@ -4651,17 +4913,27 @@ function wbUpdate() {
 }
 
 function wbCanvasToJson() {
-    if (!isPresenter && wbIsLock) return;
-    if (rc.thereAreParticipants()) {
-        let wbCanvasJson = JSON.stringify(wbCanvas.toJSON());
-        rc.socket.emit('wbCanvasToJson', wbCanvasJson);
+    console.log('wbCanvasToJson called');
+    if (!isPresenter && wbIsLock) {
+        console.log('Not presenter and whiteboard is locked. Exiting');
+        return;
     }
+    if (!rc.thereAreParticipants()) {
+        console.log('No participants. Exiting');
+        return;
+    }
+    let wbCanvasJson = JSON.stringify(wbCanvas.toJSON());
+    console.log('Emitting wbCanvasToJson');
+    rc.socket.emit('wbCanvasToJson', wbCanvasJson);
 }
 
 function JsonToWbCanvas(json) {
     if (!wbIsOpen) toggleWhiteboard();
-    wbCanvas.loadFromJSON(json);
-    wbCanvas.renderAll();
+    wbIsRedoing = true;
+    wbCanvas.loadFromJSON(json, function () {
+        setupWhiteboardCanvasSize();
+        wbIsRedoing = false;
+    });
     if (!isPresenter && !wbCanvas.isDrawingMode && wbIsLock) {
         wbDrawing(false);
     }
@@ -4678,12 +4950,12 @@ function confirmClearBoard() {
     Swal.fire({
         background: swalBackground,
         imageUrl: image.delete,
-        position: 'center',
-        title: 'Очистить доску',
-        text: 'Вы уверены, что хотите очистить доску?',
+        position: 'top',
+        title: 'Clean the board',
+        text: 'Are you sure you want to clean the board?',
         showDenyButton: true,
-        confirmButtonText: `Да`,
-        denyButtonText: `Нет`,
+        confirmButtonText: `Yes`,
+        denyButtonText: `No`,
         showClass: { popup: 'animate__animated animate__fadeInDown' },
         hideClass: { popup: 'animate__animated animate__fadeOutUp' },
     }).then((result) => {
@@ -4691,6 +4963,23 @@ function confirmClearBoard() {
             whiteboardAction(getWhiteboardAction('clear'));
             sound('delete');
         }
+    });
+}
+
+function showWhiteboardShortcuts() {
+    const whiteboardShortcutsContent = getId('whiteboardShortcutsContent');
+    if (!whiteboardShortcutsContent) {
+        console.error('Whiteboard shortcuts content not found');
+        return;
+    }
+    Swal.fire({
+        background: swalBackground,
+        position: 'center',
+        title: 'Whiteboard Shortcuts',
+        html: whiteboardShortcutsContent.innerHTML,
+        confirmButtonText: 'Got it!',
+        showClass: { popup: 'animate__animated animate__fadeInDown' },
+        hideClass: { popup: 'animate__animated animate__fadeOutUp' },
     });
 }
 
@@ -4709,7 +4998,7 @@ function toggleLockUnlockWhiteboard() {
     whiteboardAction(getWhiteboardAction(action));
 
     if (wbIsLock) {
-        userLog('info', 'Доска заблокирована. \n Участники не могут взаимодействовать с ней.', 'top-right');
+        userLog('info', 'The whiteboard is locked. \n The participants cannot interact with it.', 'top-right');
         sound('locked');
     }
 }
@@ -4738,7 +5027,8 @@ function whiteboardAction(data, emit = true) {
             wbCanvasRedo();
             break;
         case 'clear':
-            wbCanvas.clear();
+            wbCanvasClear();
+            removeCanvasGrid();
             break;
         case 'lock':
             if (!isPresenter) {
@@ -4759,7 +5049,12 @@ function whiteboardAction(data, emit = true) {
             }
             break;
         case 'close':
-            if (wbIsOpen) toggleWhiteboard();
+            if (wbIsOpen) {
+                toggleWhiteboard();
+                if (BUTTONS.main.extraButton) {
+                    show(toggleExtraButton);
+                }
+            }
             break;
         default:
             break;
@@ -4772,6 +5067,161 @@ function wbDrawing(status) {
     wbCanvas.selection = status; // Disable object selection
     wbCanvas.forEachObject(function (obj) {
         obj.selectable = status; // Make all objects unselectable
+    });
+}
+
+// ####################################################
+// HANDLE WHITEBOARD DRAG AND DROP
+// ####################################################
+
+function setupWhiteboardDragAndDrop() {
+    if (!wbCanvas) return;
+
+    // Prevent default drag behaviors
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach((eventName) => {
+        wbCanvas.upperCanvasEl.addEventListener(eventName, preventDefaults, false);
+    });
+
+    function preventDefaults(e) {
+        e.preventDefault();
+        e.stopPropagation();
+    }
+
+    // Highlight drop area
+    ['dragenter', 'dragover'].forEach((eventName) => {
+        wbCanvas.upperCanvasEl.addEventListener(
+            eventName,
+            () => {
+                wbCanvas.upperCanvasEl.style.border = '1px dashed #fff';
+            },
+            false
+        );
+    });
+
+    ['dragleave', 'drop'].forEach((eventName) => {
+        wbCanvas.upperCanvasEl.addEventListener(
+            eventName,
+            () => {
+                wbCanvas.upperCanvasEl.style.border = '';
+            },
+            false
+        );
+    });
+
+    // Handle dropped files
+    wbCanvas.upperCanvasEl.addEventListener('drop', handleWhiteboardDrop, false);
+}
+
+function handleWhiteboardDrop(e) {
+    const dt = e.dataTransfer;
+    const files = dt.files;
+
+    if (files.length === 0) return;
+
+    const file = files[0];
+    const fileType = file.type;
+
+    switch (true) {
+        case fileType.startsWith('image/'):
+            renderImageToCanvas(file);
+            break;
+        case fileType === 'application/pdf':
+            renderPdfToCanvas(file);
+            break;
+        default:
+            userLog('warning', `Unsupported file type: ${fileType}. Please drop an image or PDF file.`, 'top-end');
+            break;
+    }
+}
+
+// ####################################################
+// HANDLE WHITEBOARD SHORTCUTS
+// ####################################################
+
+function setupWhiteboardShortcuts() {
+    document.addEventListener('keydown', (event) => {
+        if (!wbIsOpen) return;
+
+        // Whiteboard clone shortcut: Cmd+C/Ctrl+C
+        if ((event.key === 'c' || event.key === 'C') && (event.ctrlKey || event.metaKey)) {
+            whiteboardCloneObject();
+            event.preventDefault();
+            return;
+        }
+        // Whiteboard erase shortcut: Cmd+X/Ctrl+X
+        if ((event.key === 'x' || event.key === 'X') && (event.ctrlKey || event.metaKey)) {
+            whiteboardEraseObject();
+            event.preventDefault();
+            return;
+        }
+
+        // Whiteboard undo shortcuts: Cmd+Z/Ctrl+Z
+        if ((event.key === 'z' || event.key === 'Z') && (event.ctrlKey || event.metaKey) && !event.shiftKey) {
+            whiteboardAction(getWhiteboardAction('undo'));
+            event.preventDefault();
+            return;
+        }
+        // Whiteboard Redo shortcuts: Cmd+Shift+Z/Ctrl+Shift+Z or Cmd+Y/Ctrl+Y
+        if (
+            ((event.key === 'z' || event.key === 'Z') && (event.ctrlKey || event.metaKey) && event.shiftKey) ||
+            ((event.key === 'y' || event.key === 'Y') && (event.ctrlKey || event.metaKey))
+        ) {
+            whiteboardAction(getWhiteboardAction('redo'));
+            event.preventDefault();
+            return;
+        }
+
+        // Use event.code and check for Alt+Meta (Mac) or Alt+Ctrl (Windows/Linux)
+        if (event.code && event.altKey && (event.ctrlKey || event.metaKey) && !event.shiftKey) {
+            switch (event.code) {
+                case 'KeyT': // Text
+                    whiteboardAddObj('text');
+                    event.preventDefault();
+                    break;
+                case 'KeyL': // Line
+                    whiteboardAddObj('line');
+                    event.preventDefault();
+                    break;
+                case 'KeyC': // Circle
+                    whiteboardAddObj('circle');
+                    event.preventDefault();
+                    break;
+                case 'KeyR': // Rectangle
+                    whiteboardAddObj('rect');
+                    event.preventDefault();
+                    break;
+                case 'KeyG': // Triangle (G for Geometry)
+                    whiteboardAddObj('triangle');
+                    event.preventDefault();
+                    break;
+                case 'KeyN': // Sticky Note
+                    whiteboardAddObj('stickyNote');
+                    event.preventDefault();
+                    break;
+                case 'KeyU': // Image (from URL)
+                    whiteboardAddObj('imgUrl');
+                    event.preventDefault();
+                    break;
+                case 'KeyV': // Vanishing Pen
+                    whiteboardIsVanishingMode(!wbIsVanishing);
+                    event.preventDefault();
+                    break;
+                case 'KeyI': // Image (from file)
+                    whiteboardAddObj('imgFile');
+                    event.preventDefault();
+                    break;
+                case 'KeyP': // PDF (from file)
+                    whiteboardAddObj('pdfFile');
+                    event.preventDefault();
+                    break;
+                case 'KeyQ': // Clear Board
+                    confirmClearBoard();
+                    event.preventDefault();
+                    break;
+                default:
+                    break;
+            }
+        }
     });
 }
 
@@ -4806,6 +5256,7 @@ async function getRoomParticipants() {
     const lists = getParticipantsList(peers);
     participantsCount = peers.size;
     participantsList.innerHTML = lists;
+    handleDropdownHover(participantsList.querySelectorAll('.dropdown'));
     refreshParticipantsCount(participantsCount, false);
     setParticipantsTippy(peers);
     console.log('*** Refresh Chat participant lists ***');
@@ -4886,7 +5337,7 @@ function getParticipantsList(peers) {
     // ONLY PRESENTER CAN EXECUTE THIS CMD
     if (!isRulesActive || isPresenter) {
         li += `
-        <div style="class="dropdown">
+        <div class="dropdown">
             <button 
                 class="dropdown-toggle" 
                 type="button" 
@@ -4895,8 +5346,7 @@ function getParticipantsList(peers) {
                 aria-expanded="false"
                 style="float: right"
             >
-            <!-- <i class="fas fa-bars"></i> -->
-            <i class="fas fa-ellipsis-vertical"></i>
+            <i class="fas fa-bars"></i>
             </button>
             <ul class="dropdown-menu text-start" aria-labelledby="${socket.id}-chatDropDownMenu">`;
 
@@ -4972,7 +5422,7 @@ function getParticipantsList(peers) {
                         <div class="status"> <i class="fa fa-circle online"></i> online <i id="${peer_id}-unread-msg" class="fas fa-comments hidden"></i> </div>
                     </div>
 
-                    <div style="class="dropdown">
+                    <div class="dropdown">
                         <button 
                             class="dropdown-toggle" 
                             type="button" 
@@ -4981,8 +5431,7 @@ function getParticipantsList(peers) {
                             aria-expanded="false"
                             style="float: right"
                         >
-                        <!-- <i class="fas fa-bars"></i> -->
-                        <i class="fas fa-ellipsis-vertical"></i>
+                        <i class="fas fa-bars"></i>
                         </button>
                         <ul class="dropdown-menu text-start" aria-labelledby="${peer_id}-chatDropDownMenu">`;
 
@@ -5052,7 +5501,7 @@ function getParticipantsList(peers) {
                 // NO ROOM BROADCASTING
                 if (!isBroadcastingEnabled) {
                     li += `
-                    <div style="class="dropdown">
+                    <div class="dropdown">
                         <button 
                             class="dropdown-toggle" 
                             type="button" 
@@ -5061,8 +5510,7 @@ function getParticipantsList(peers) {
                             aria-expanded="false"
                             style="float: right"
                         >
-                        <!-- <i class="fas fa-bars"></i> -->
-                        <i class="fas fa-ellipsis-vertical"></i>
+                        <i class="fas fa-bars"></i>
                         </button>
                         <ul class="dropdown-menu text-start" aria-labelledby="${peer_id}-chatDropDownMenu">`;
 
@@ -5347,6 +5795,20 @@ function handleAspectRatio() {
 }
 
 function adaptAspectRatio(participantsCount) {
+    if (BtnAspectRatio.selectedIndex !== 0) {
+        // User preferred aspect ratio
+        setAspectRatio(BtnAspectRatio.selectedIndex);
+        return;
+    }
+
+    // Update the participants count badge
+    if (participantsCountBadge) {
+        participantsCountBadge.textContent = participantsCount;
+        participantsCount > 1
+            ? elemDisplay('participantsCountBadge', true, 'flex')
+            : elemDisplay('participantsCountBadge', false);
+    }
+
     /* 
         ['0:0', '4:3', '16:9', '1:1', '1:2'];
     */
@@ -5401,8 +5863,9 @@ function adaptAspectRatio(participantsCount) {
         desktop = 1; // (4:3)
         mobile = 3; // (1:1)
     }
-    BtnAspectRatio.selectedIndex = isMobileDevice ? mobile : desktop;
-    setAspectRatio(BtnAspectRatio.selectedIndex);
+
+    const aspectRatio = isMobileDevice ? mobile : desktop;
+    setAspectRatio(aspectRatio);
 }
 
 // ####################################################
@@ -5763,18 +6226,23 @@ window.addEventListener('popstate', (event) => {
     Swal.fire({
         background: swalBackground,
         position: 'top',
-        title: 'Выйти из сессии?',
-        text: 'Вы уверены, что хотите завершить эту сессию?',
+        title: 'Leave session?',
+        text: 'Are you sure you want to exit this session?',
         icon: 'warning',
         showCancelButton: true,
-        confirmButtonText: 'Да',
-        cancelButtonText: 'Нет',
+        confirmButtonText: 'Yes',
+        cancelButtonText: 'No',
         confirmButtonColor: '#3085d6',
         cancelButtonColor: '#d33',
         showClass: { popup: 'animate__animated animate__fadeInDown' },
         hideClass: { popup: 'animate__animated animate__fadeOutUp' },
     }).then((result) => {
         if (result.isConfirmed) {
+            // Save recording if in progress
+            if (rc.isRecording() || recordingStatus.innerText != '0s') {
+                recShowInfo = false;
+                rc.saveRecording('User popstate changes');
+            }
             preventExit = false;
             // Actually go back in history
             history.back();
@@ -5787,6 +6255,12 @@ window.addEventListener('popstate', (event) => {
 
 // Intercept tab close, refresh, or direct URL navigation
 window.addEventListener('beforeunload', (e) => {
+    // Save recording if in progress
+    if (rc.isRecording() || recordingStatus.innerText != '0s') {
+        recShowInfo = false;
+        rc.saveRecording('User is closing the tab, refreshing, or navigating away');
+    }
+
     if (!preventExit || window.localStorage.isReconnected === 'true') return;
     // Modern browsers ignore custom messages, but this triggers the prompt
     e.preventDefault();
@@ -5805,7 +6279,7 @@ function showAbout() {
         position: 'center',
         imageUrl: BRAND.about?.imageUrl && BRAND.about.imageUrl.trim() !== '' ? BRAND.about.imageUrl : image.about,
         customClass: { image: 'img-about' },
-        title: BRAND.about?.title && BRAND.about.title.trim() !== '' ? BRAND.about.title : 'WebRTC SFU v1.9.45',
+        title: BRAND.about?.title && BRAND.about.title.trim() !== '' ? BRAND.about.title : 'WebRTC SFU v2.0.53',
         html: `
             <br />
             <div id="about">
@@ -5813,32 +6287,32 @@ function showAbout() {
                     BRAND.about?.html && BRAND.about.html.trim() !== ''
                         ? BRAND.about.html
                         : `
-                                <button
-                                    id="support-button"
-                                    data-umami-event="Support button"
-                                    onclick="window.open('https://codecanyon.net/user/miroslavpejic85', '_blank')">
-                                <i class="fas fa-heart"></i> Поддержать
+                            <button 
+                                id="support-button" 
+                                data-umami-event="Support button" 
+                                onclick="window.open('https://codecanyon.net/user/miroslavpejic85', '_blank')">
+                                <i class="fas fa-heart"></i> Support
                             </button>
                             <br /><br /><br />
-                            Автор:
-                            <a
-                                id="linkedin-button"
-                                data-umami-event="Linkedin button"
-                                href="https://www.linkedin.com/in/miroslav-pejic-976a07101/"
-                                target="_blank">
+                            Author: 
+                            <a 
+                                id="linkedin-button" 
+                                data-umami-event="Linkedin button" 
+                                href="https://www.linkedin.com/in/miroslav-pejic-976a07101/" 
+                                target="_blank"> 
                                 Miroslav Pejic
                             </a>
                             <br /><br />
-                            Электронная почта:
-                            <a
+                            Email: 
+                            <a 
                                 id="email-button" 
                                 data-umami-event="Email button" 
-                                href="mailto:miroslav.pejic.85@gmail.com?subject=Kremlevka info">
+                                href="mailto:miroslav.pejic.85@gmail.com?subject=MiroTalk SFU info"> 
                                 miroslav.pejic.85@gmail.com
                             </a>
                             <br /><br />
                             <hr />
-                            <span>&copy; 2025 Kremlevka, all rights reserved</span>
+                            <span>&copy; 2025 MiroTalk SFU, all rights reserved</span>
                             <hr />
                         `
                 }
