@@ -571,7 +571,7 @@ body {
 #bottomButtons {
     z-index: 3;
     position: fixed;
-    display: none;
+    display: flex;
     padding: 5px;
     top: var(--bottom-btns-top);
     left: var(--bottom-btns-left);
