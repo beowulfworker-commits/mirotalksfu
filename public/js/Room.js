@@ -3556,6 +3556,11 @@ function applySyntaxHighlighting() {
 // ####################################################
 
 function loadSettingsFromLocalStorage() {
+    if (!localStorageSettings.keep_buttons_visible) {
+        localStorageSettings.keep_buttons_visible = true;
+        ls.setSettings(localStorageSettings);
+    }
+
     rc.showChatOnMessage = localStorageSettings.show_chat_on_msg;
     transcription.showOnMessage = localStorageSettings.transcript_show_on_msg;
     rc.speechInMessages = localStorageSettings.speech_in_msg;
