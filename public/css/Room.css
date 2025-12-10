@@ -119,10 +119,15 @@ body {
 }
 
 .init-user {
-    display: flex;
-    gap: 24px;
-    padding: 5px;
-    align-items: flex-start;
+    display: none;
+    gap: 0;
+    padding: 0;
+    align-items: stretch;
+}
+
+.init-user .init-video-container,
+.init-user .initComands {
+    display: none;
 }
 
 .init-video-container {
