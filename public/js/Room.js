@@ -121,6 +121,19 @@ const localStorageDevices = lS.getLocalStorageDevices() || lS.LOCAL_STORAGE_DEVI
 
 const localStorageInitConfig = lS.getLocalStorageInitConfig() || lS.INIT_CONFIG;
 
+// Avoid automatic camera/microphone requests unless explicitly enabled.
+let autoStartDevices = localStorageSettings?.auto_start_devices ?? false;
+const autoStartDevicesQuery = getQueryParam('autoStartDevices');
+if (autoStartDevicesQuery) {
+    autoStartDevices = autoStartDevicesQuery.toLowerCase() === 'true';
+}
+
+if (autoStartDevices) {
+    isAudioAllowed = true;
+    isVideoAllowed = true;
+    joinRoomWithoutAudioVideo = false;
+}
+
 console.log('LOCAL_STORAGE', {
     localStorageSettings: localStorageSettings,
     localStorageDevices: localStorageDevices,
@@ -329,7 +342,7 @@ let quill = null;
 
 document.addEventListener('DOMContentLoaded', function () {
     initCursorLightEffect();
-    initClient();
+    initClient().catch((error) => console.error('Error during client init', error));
 });
 
 // ####################################################
@@ -348,7 +361,7 @@ function initCursorLightEffect() {
     });
 }
 
-function initClient() {
+async function initClient() {
     setTheme();
 
     // Transcription
@@ -463,7 +476,12 @@ function initClient() {
         setTippy('transcriptionSpeechStop', 'Stop transcription', 'top');
     }
     setupWhiteboard();
-    initEnumerateDevices();
+    try {
+        await initEnumerateDevices(autoStartDevices);
+    } catch (error) {
+        console.error('Failed to enumerate devices on init', error);
+    }
+    await initRoom();
     setupInitButtons();
 }
 
@@ -590,11 +608,10 @@ async function initRoom() {
 // ENUMERATE DEVICES
 // ####################################################
 
-async function initEnumerateDevices() {
+async function initEnumerateDevices(requestPermissions = false) {
     console.log('01 ----> init Enumerate Devices');
-    await initEnumerateVideoDevices();
-    await initEnumerateAudioDevices();
-    await initRoom();
+    await initEnumerateVideoDevices(requestPermissions);
+    await initEnumerateAudioDevices(requestPermissions);
 }
 
 async function refreshMyAudioVideoDevices() {
@@ -603,7 +620,6 @@ async function refreshMyAudioVideoDevices() {
 }
 
 async function refreshMyVideoDevices() {
-    if (!isVideoAllowed) return;
     const initVideoSelectIndex = initVideoSelect ? initVideoSelect.selectedIndex : 0;
     const videoSelectIndex = videoSelect ? videoSelect.selectedIndex : 0;
     await initEnumerateVideoDevices();
@@ -612,7 +628,6 @@ async function refreshMyVideoDevices() {
 }
 
 async function refreshMyAudioDevices() {
-    if (!isAudioAllowed) return;
     const initMicrophoneSelectIndex = initMicrophoneSelect ? initMicrophoneSelect.selectedIndex : 0;
     const initSpeakerSelectIndex = initSpeakerSelect ? initSpeakerSelect.selectedIndex : 0;
     const microphoneSelectIndex = microphoneSelect ? microphoneSelect.selectedIndex : 0;
@@ -624,17 +639,22 @@ async function refreshMyAudioDevices() {
     if (speakerSelect) speakerSelect.selectedIndex = speakerSelectIndex;
 }
 
-async function initEnumerateVideoDevices() {
-    // allow the video
-    await navigator.mediaDevices
-        .getUserMedia({ video: true })
-        .then(async (stream) => {
-            await enumerateVideoDevices(stream);
-            isVideoAllowed = true;
-        })
-        .catch(() => {
-            isVideoAllowed = false;
-        });
+async function initEnumerateVideoDevices(requestPermissions = false) {
+    let stream = null;
+
+    try {
+        if (requestPermissions) {
+            stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        }
+        await enumerateVideoDevices(stream);
+    } catch (error) {
+        if (requestPermissions) {
+            handleDeviceRequestError('camera', error);
+        }
+        isEnumerateVideoDevices = false;
+    } finally {
+        if (stream) await stopTracks(stream);
+    }
 }
 
 async function enumerateVideoDevices(stream) {
@@ -659,23 +679,30 @@ async function enumerateVideoDevices(stream) {
             })
         )
         .then(async () => {
-            await stopTracks(stream);
+            if (stream) await stopTracks(stream);
             isEnumerateVideoDevices = true;
         });
 }
 
-async function initEnumerateAudioDevices() {
-    // allow the audio
-    await navigator.mediaDevices
-        .getUserMedia({ audio: true })
-        .then(async (stream) => {
-            await enumerateAudioDevices(stream);
+async function initEnumerateAudioDevices(requestPermissions = false) {
+    let stream = null;
+
+    try {
+        if (requestPermissions) {
+            stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        }
+        await enumerateAudioDevices(stream);
+        if (stream) {
             await getMicrophoneVolumeIndicator(stream);
-            isAudioAllowed = true;
-        })
-        .catch(() => {
-            isAudioAllowed = false;
-        });
+        }
+    } catch (error) {
+        if (requestPermissions) {
+            handleDeviceRequestError('microphone', error);
+        }
+        isEnumerateAudioDevices = false;
+    } finally {
+        if (stream) await stopTracks(stream);
+    }
 }
 
 async function enumerateAudioDevices(stream) {
@@ -707,7 +734,7 @@ async function enumerateAudioDevices(stream) {
             })
         )
         .then(async () => {
-            await stopTracks(stream);
+            if (stream) await stopTracks(stream);
             isEnumerateAudioDevices = true;
             speakerSelect.disabled = !sinkId;
             // Check if there is speakers
@@ -864,6 +891,58 @@ function hasVideoTrack(mediaStream) {
     if (!mediaStream) return false;
     const videoTracks = mediaStream.getVideoTracks();
     return videoTracks.length > 0;
+}
+
+// ####################################################
+// REQUEST LOCAL MEDIA
+// ####################################################
+
+// Requesting camera/microphone access only happens through these helpers,
+// which are wired to explicit user actions (or direct URL/query flags).
+async function requestMicrophone() {
+    setAudioButtonsDisabled(true);
+
+    try {
+        if (!isEnumerateAudioDevices) await initEnumerateAudioDevices();
+
+        const producerExist = rc.producerExist(RoomClient.mediaType.audio);
+        console.log('START AUDIO producerExist --->', producerExist);
+
+        producerExist
+            ? await rc.resumeProducer(RoomClient.mediaType.audio)
+            : await rc.produce(RoomClient.mediaType.audio, microphoneSelect.value);
+
+        rc.updatePeerInfo(peer_name, socket.id, 'audio', true);
+        isAudioAllowed = true;
+        await refreshMyAudioDevices();
+    } catch (error) {
+        handleDeviceRequestError('microphone', error);
+    } finally {
+        setAudioButtonsDisabled(false);
+    }
+}
+
+async function requestCamera() {
+    setVideoButtonsDisabled(true);
+
+    try {
+        if (!isEnumerateVideoDevices) await initEnumerateVideoDevices();
+
+        const producerExist = rc.producerExist(RoomClient.mediaType.video);
+        console.log('START VIDEO producerExist --->', producerExist);
+
+        producerExist
+            ? await rc.resumeProducer(RoomClient.mediaType.video)
+            : await rc.produce(RoomClient.mediaType.video, videoSelect.value);
+
+        rc.updatePeerInfo(peer_name, socket.id, 'video', true);
+        isVideoAllowed = true;
+        await refreshMyVideoDevices();
+    } catch (error) {
+        handleDeviceRequestError('camera', error);
+    } finally {
+        setVideoButtonsDisabled(false);
+    }
 }
 
 // ####################################################
@@ -2253,17 +2332,7 @@ function handleButtons() {
             return userLog('warning', 'The moderator does not allow you to unmute', 'top-end', 6000);
         }
         if (isPushToTalkActive) return;
-        setAudioButtonsDisabled(true);
-        if (!isEnumerateAudioDevices) await initEnumerateAudioDevices();
-
-        const producerExist = rc.producerExist(RoomClient.mediaType.audio);
-        console.log('START AUDIO producerExist --->', producerExist);
-
-        producerExist
-            ? await rc.resumeProducer(RoomClient.mediaType.audio)
-            : await rc.produce(RoomClient.mediaType.audio, microphoneSelect.value);
-
-        rc.updatePeerInfo(peer_name, socket.id, 'audio', true);
+        await requestMicrophone();
     };
     stopAudioButton.onclick = async () => {
         if (isPushToTalkActive) return;
@@ -2283,9 +2352,7 @@ function handleButtons() {
         if (moderator.video_cant_unhide) {
             return userLog('warning', 'The moderator does not allow you to unhide', 'top-end', 6000);
         }
-        setVideoButtonsDisabled(true);
-        if (!isEnumerateVideoDevices) await initEnumerateVideoDevices();
-        await rc.produce(RoomClient.mediaType.video, videoSelect.value);
+        await requestCamera();
         // await rc.resumeProducer(RoomClient.mediaType.video);
     };
     stopVideoButton.onclick = () => {
@@ -2293,6 +2360,7 @@ function handleButtons() {
         rc.closeProducer(RoomClient.mediaType.video);
         // await rc.pauseProducer(RoomClient.mediaType.video);
     };
+
     startScreenButton.onclick = async () => {
         const moderator = rc.getModerator();
         if (moderator.screen_cant_share) {
@@ -2559,6 +2627,16 @@ function refreshLsDevices() {
 }
 
 async function changeCamera(deviceId) {
+    if (!deviceId) return;
+
+    const hasActiveCameraPreview =
+        initStream || (rc && rc.producerExist && rc.producerExist(RoomClient.mediaType.video));
+
+    if (!autoStartDevices && !hasActiveCameraPreview) {
+        refreshLsDevices();
+        return;
+    }
+
     if (initStream) {
         await stopTracks(initStream);
         elemDisplay('initVideo', true);
@@ -2589,7 +2667,7 @@ async function changeCamera(deviceId) {
         })
         .catch((error) => {
             console.error('[Error] changeCamera', error);
-            handleMediaError('video/audio', error, '/');
+            handleDeviceRequestError('camera', error);
             isInitVideoLoaded = false;
         });
 
@@ -2611,8 +2689,38 @@ function detectCameraFacingMode(stream) {
 }
 
 // ####################################################
-// HANDLE MEDIA ERROR
+// MEDIA ACCESS HANDLERS
 // ####################################################
+
+function handleDeviceRequestError(deviceType, error) {
+    console.error(`Error requesting ${deviceType}`, error);
+
+    if (!error) return;
+
+    const isCamera = deviceType === 'camera';
+    const deviceLabel = isCamera ? 'camera' : 'microphone';
+    const blockedMessage = `Access to the ${deviceLabel} is blocked in your browser settings. Please enable it for this site.`;
+    const notFoundMessage = `No suitable ${deviceLabel} was found. Please check your ${deviceLabel} connection and settings.`;
+    let message = `Unable to access the ${deviceLabel}.`;
+
+    switch (error.name) {
+        case 'NotAllowedError':
+        case 'SecurityError':
+        case 'PermissionDeniedError':
+            message = blockedMessage;
+            break;
+        case 'NotFoundError':
+        case 'DevicesNotFoundError':
+        case 'OverconstrainedError':
+        case 'ConstraintNotSatisfiedError':
+            message = notFoundMessage;
+            break;
+        default:
+            break;
+    }
+
+    userLog('error', message, 'top-end', 6000);
+}
 
 function handleMediaError(mediaType, err, redirectURL = false) {
     sound('alert');
@@ -2757,32 +2865,46 @@ function handleSelects() {
     // devices options
     videoSelect.onchange = (e) => {
         videoQuality.selectedIndex = 0;
-        rc.closeThenProduce(RoomClient.mediaType.video, videoSelect.value);
+        if (rc.producerExist(RoomClient.mediaType.video)) {
+            rc.closeThenProduce(RoomClient.mediaType.video, videoSelect.value);
+        }
         refreshLsDevices();
     };
     videoQuality.onchange = () => {
-        rc.closeThenProduce(RoomClient.mediaType.video, videoSelect.value);
+        if (rc.producerExist(RoomClient.mediaType.video)) {
+            rc.closeThenProduce(RoomClient.mediaType.video, videoSelect.value);
+        }
     };
     screenQuality.onchange = () => {
-        rc.closeThenProduce(RoomClient.mediaType.screen);
+        if (rc.producerExist(RoomClient.mediaType.screen)) {
+            rc.closeThenProduce(RoomClient.mediaType.screen);
+        }
     };
     screenOptimization.onchange = () => {
-        rc.closeThenProduce(RoomClient.mediaType.screen);
+        if (rc.producerExist(RoomClient.mediaType.screen)) {
+            rc.closeThenProduce(RoomClient.mediaType.screen);
+        }
         localStorageSettings.screen_optimization = screenOptimization.selectedIndex;
         lS.setSettings(localStorageSettings);
     };
     videoFps.onchange = () => {
-        rc.closeThenProduce(RoomClient.mediaType.video, videoSelect.value);
+        if (rc.producerExist(RoomClient.mediaType.video)) {
+            rc.closeThenProduce(RoomClient.mediaType.video, videoSelect.value);
+        }
         localStorageSettings.video_fps = videoFps.selectedIndex;
         lS.setSettings(localStorageSettings);
     };
     screenFps.onchange = () => {
-        rc.closeThenProduce(RoomClient.mediaType.screen);
+        if (rc.producerExist(RoomClient.mediaType.screen)) {
+            rc.closeThenProduce(RoomClient.mediaType.screen);
+        }
         localStorageSettings.screen_fps = screenFps.selectedIndex;
         lS.setSettings(localStorageSettings);
     };
     microphoneSelect.onchange = () => {
-        rc.closeThenProduce(RoomClient.mediaType.audio, microphoneSelect.value);
+        if (rc.producerExist(RoomClient.mediaType.audio)) {
+            rc.closeThenProduce(RoomClient.mediaType.audio, microphoneSelect.value);
+        }
         refreshLsDevices();
     };
     speakerSelect.onchange = () => {
@@ -2798,9 +2920,7 @@ function handleSelects() {
         const producerExist = rc.producerExist(RoomClient.mediaType.audio);
         if (!producerExist && !isPushToTalkActive) {
             console.log('Push-to-talk: start audio producer');
-            setAudioButtonsDisabled(true);
-            if (!isEnumerateAudioDevices) initEnumerateAudioDevices();
-            await rc.produce(RoomClient.mediaType.audio, microphoneSelect.value);
+            await requestMicrophone();
             setTimeout(async function () {
                 await rc.pauseProducer(RoomClient.mediaType.audio);
                 rc.updatePeerInfo(peer_name, socket.id, 'audio', false);

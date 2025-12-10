@@ -10,9 +10,9 @@ class LocalStorage {
         };
 
         this.INIT_CONFIG = {
-            audio: true,
-            video: true,
-            audioVideo: true,
+            audio: false,
+            video: false,
+            audioVideo: false,
         };
 
         this.SFU_SETTINGS = {
@@ -20,6 +20,7 @@ class LocalStorage {
             show_chat_on_msg: true, // show chat on new message
             transcript_show_on_msg: true, // show transcript on new message
             speech_in_msg: false, // speech incoming message
+            auto_start_devices: false, // Automatically start camera/microphone on join
             moderator_video_start_privacy: false, // Everyone starts video in privacy mode
             moderator_audio_start_muted: false, // Everyone starts muted in the room
             moderator_video_start_hidden: false, // Everyone starts hidden in the room
