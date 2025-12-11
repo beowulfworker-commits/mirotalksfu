@@ -248,6 +248,7 @@ let producer = null;
 let participantsCount = 0;
 let lobbyParticipantsCount = 0;
 let chatMessagesId = 0;
+let buttonsHandlersInitialized = false;
 
 let room_id = getRoomId();
 let room_password = getRoomPassword();
@@ -483,6 +484,8 @@ async function initClient() {
     }
     await initRoom();
     setupInitButtons();
+    // Ensure control buttons are wired immediately, even before media starts.
+    handleButtons();
 }
 
 // ####################################################
@@ -1988,6 +1991,16 @@ function stopRecordingTimer() {
 // ####################################################
 
 function handleButtons() {
+    if (buttonsHandlersInitialized) return;
+    buttonsHandlersInitialized = true;
+
+    const ensureRoomClient = (action) => {
+        if (rc) return true;
+        console.warn(`Room client not ready for action: ${action}`);
+        userLog('warning', 'Room is still initializing, please try again.', 'top-end', 4000);
+        return false;
+    };
+
     // Lobby...
     document.getElementById('lobbyUsers').addEventListener('click', function (event) {
         switch (event.target.id) {
@@ -2327,6 +2340,8 @@ function handleButtons() {
         }
     };
     startAudioButton.onclick = async () => {
+        if (!ensureRoomClient('start audio')) return;
+
         const moderator = rc.getModerator();
         if (moderator.audio_cant_unmute) {
             return userLog('warning', 'The moderator does not allow you to unmute', 'top-end', 6000);
@@ -2335,6 +2350,7 @@ function handleButtons() {
         await requestMicrophone();
     };
     stopAudioButton.onclick = async () => {
+        if (!ensureRoomClient('stop audio')) return;
         if (isPushToTalkActive) return;
         setAudioButtonsDisabled(true);
 
@@ -2348,6 +2364,8 @@ function handleButtons() {
         rc.updatePeerInfo(peer_name, socket.id, 'audio', false);
     };
     startVideoButton.onclick = async () => {
+        if (!ensureRoomClient('start video')) return;
+
         const moderator = rc.getModerator();
         if (moderator.video_cant_unhide) {
             return userLog('warning', 'The moderator does not allow you to unhide', 'top-end', 6000);
@@ -2356,12 +2374,15 @@ function handleButtons() {
         // await rc.resumeProducer(RoomClient.mediaType.video);
     };
     stopVideoButton.onclick = () => {
+        if (!ensureRoomClient('stop video')) return;
         setVideoButtonsDisabled(true);
         rc.closeProducer(RoomClient.mediaType.video);
         // await rc.pauseProducer(RoomClient.mediaType.video);
     };
 
     startScreenButton.onclick = async () => {
+        if (!ensureRoomClient('start screen')) return;
+
         const moderator = rc.getModerator();
         if (moderator.screen_cant_share) {
             return userLog('warning', 'The moderator does not allow you to share the screen', 'top-end', 6000);
@@ -2369,6 +2390,7 @@ function handleButtons() {
         await rc.produce(RoomClient.mediaType.screen);
     };
     stopScreenButton.onclick = () => {
+        if (!ensureRoomClient('stop screen')) return;
         rc.closeProducer(RoomClient.mediaType.screen);
     };
     copyRtmpUrlButton.onclick = () => {
