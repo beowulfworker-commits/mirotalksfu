@@ -114,12 +114,41 @@ const sinkId = 'sinkId' in HTMLMediaElement.prototype;
 // ####################################################
 
 const lS = new LocalStorage();
+const ls = typeof window !== 'undefined' && window.ls ? window.ls : lS;
 
-const localStorageSettings = lS.getLocalStorageSettings() || lS.SFU_SETTINGS;
+function cloneObject(obj) {
+    return JSON.parse(JSON.stringify(obj));
+}
 
-const localStorageDevices = lS.getLocalStorageDevices() || lS.LOCAL_STORAGE_DEVICES;
+function safeLoadLocalStorage(getter, defaults, label) {
+    try {
+        const stored = getter();
+        if (stored && typeof stored === 'object') {
+            return mergeConfig(cloneObject(defaults), stored);
+        }
+    } catch (error) {
+        console.warn(`Failed to load ${label} from localStorage`, error);
+    }
+    return cloneObject(defaults);
+}
 
-const localStorageInitConfig = lS.getLocalStorageInitConfig() || lS.INIT_CONFIG;
+const localStorageSettings = safeLoadLocalStorage(
+    () => lS.getLocalStorageSettings(),
+    lS.SFU_SETTINGS,
+    'settings'
+);
+
+const localStorageDevices = safeLoadLocalStorage(
+    () => lS.getLocalStorageDevices(),
+    lS.LOCAL_STORAGE_DEVICES,
+    'devices'
+);
+
+const localStorageInitConfig = safeLoadLocalStorage(
+    () => lS.getLocalStorageInitConfig(),
+    lS.INIT_CONFIG,
+    'init config'
+);
 
 // Avoid automatic camera/microphone requests unless explicitly enabled.
 let autoStartDevices = localStorageSettings?.auto_start_devices ?? false;
@@ -254,6 +283,7 @@ let buttonsHandlersInitialized = false;
 const control = document.getElementById('control');
 const bottomButtons = document.getElementById('bottomButtons');
 const toggleExtraButton = document.getElementById('toggleExtraButton');
+const tabNotificationsBtn = document.getElementById('tabNotificationsBtn');
 
 let room_id = getRoomId();
 let room_password = getRoomPassword();
@@ -1832,7 +1862,7 @@ function roomIsReady() {
     BUTTONS.settings.lobbyButton && show(lobbyButton);
     BUTTONS.settings.sendEmailInvitation && show(sendEmailInvitation);
     !BUTTONS.settings.customNoiseSuppression && hide(noiseSuppressionButton);
-    BUTTONS.settings.tabNotificationsBtn && show(tabNotificationsBtn);
+    if (BUTTONS.settings.tabNotificationsBtn && tabNotificationsBtn) show(tabNotificationsBtn);
     if (rc.recording.recSyncServerRecording) show(roomRecordingServer);
     BUTTONS.main.aboutButton && show(aboutButton);
     if (!isMobileDevice) show(pinUnpinGridDiv);
@@ -2094,9 +2124,11 @@ function handleButtons() {
     tabAspectBtn.onclick = (e) => {
         rc.openTab(e, 'tabAspect');
     };
-    tabNotificationsBtn.onclick = (e) => {
-        rc.openTab(e, 'tabNotifications');
-    };
+    if (tabNotificationsBtn) {
+        tabNotificationsBtn.onclick = (e) => {
+            rc.openTab(e, 'tabNotifications');
+        };
+    }
     tabModeratorBtn.onclick = (e) => {
         rc.openTab(e, 'tabModerator');
     };
@@ -3712,50 +3744,61 @@ function applySyntaxHighlighting() {
 // ####################################################
 
 function loadSettingsFromLocalStorage() {
-    if (!localStorageSettings.keep_buttons_visible) {
-        localStorageSettings.keep_buttons_visible = true;
-        ls.setSettings(localStorageSettings);
+    if (!rc) {
+        console.warn('Room client not ready to load settings');
+        return;
     }
 
-    rc.showChatOnMessage = localStorageSettings.show_chat_on_msg;
-    transcription.showOnMessage = localStorageSettings.transcript_show_on_msg;
-    rc.speechInMessages = localStorageSettings.speech_in_msg;
-    isPitchBarEnabled = localStorageSettings.pitch_bar;
-    isSoundEnabled = localStorageSettings.sounds;
-    isKeepButtonsVisible = localStorageSettings.keep_buttons_visible;
-    isShortcutsEnabled = localStorageSettings.keyboard_shortcuts;
-    showChatOnMsg.checked = rc.showChatOnMessage;
-    transcriptShowOnMsg.checked = transcription.showOnMessage;
-    speechIncomingMsg.checked = rc.speechInMessages;
-    switchPitchBar.checked = isPitchBarEnabled;
-    switchSounds.checked = isSoundEnabled;
-    switchShare.checked = notify;
-    switchKeepButtonsVisible.checked = isKeepButtonsVisible;
-    switchShortcuts.checked = isShortcutsEnabled;
+    const settings = localStorageSettings || cloneObject(lS.SFU_SETTINGS);
 
-    switchServerRecording.checked = localStorageSettings.rec_server;
+    try {
+        if (!settings.keep_buttons_visible) {
+            settings.keep_buttons_visible = true;
+            ls.setSettings(settings);
+        }
 
-    keepCustomTheme.checked = themeCustom.keep;
-    selectTheme.disabled = themeCustom.keep;
-    themeCustom.input.value = themeCustom.color;
+        rc.showChatOnMessage = settings.show_chat_on_msg;
+        transcription.showOnMessage = settings.transcript_show_on_msg;
+        rc.speechInMessages = settings.speech_in_msg;
+        isPitchBarEnabled = settings.pitch_bar;
+        isSoundEnabled = settings.sounds;
+        isKeepButtonsVisible = settings.keep_buttons_visible;
+        isShortcutsEnabled = settings.keyboard_shortcuts;
+        showChatOnMsg.checked = rc.showChatOnMessage;
+        transcriptShowOnMsg.checked = transcription.showOnMessage;
+        speechIncomingMsg.checked = rc.speechInMessages;
+        switchPitchBar.checked = isPitchBarEnabled;
+        switchSounds.checked = isSoundEnabled;
+        switchShare.checked = notify;
+        switchKeepButtonsVisible.checked = isKeepButtonsVisible;
+        switchShortcuts.checked = isShortcutsEnabled;
 
-    switchDominantSpeakerFocus.checked = localStorageSettings.dominant_speaker_focus;
-    switchNoiseSuppression.checked = localStorageSettings.mic_noise_suppression;
+        switchServerRecording.checked = settings.rec_server;
 
-    screenOptimization.selectedIndex = localStorageSettings.screen_optimization;
-    videoFps.selectedIndex = localStorageSettings.video_fps;
-    screenFps.selectedIndex = localStorageSettings.screen_fps;
-    BtnAspectRatio.selectedIndex = localStorageSettings.aspect_ratio;
-    BtnVideoObjectFit.selectedIndex = localStorageSettings.video_obj_fit;
-    BtnVideoControls.selectedIndex = localStorageSettings.video_controls;
-    BtnsBarPosition.selectedIndex = localStorageSettings.buttons_bar;
-    pinVideoPosition.selectedIndex = localStorageSettings.pin_grid;
-    rc.handleVideoObjectFit(BtnVideoObjectFit.value);
-    rc.handleVideoControls(BtnVideoControls.value);
-    rc.changeBtnsBarPosition(BtnsBarPosition.value);
-    rc.toggleVideoPin(pinVideoPosition.value);
-    refreshMainButtonsToolTipPlacement();
-    resizeMainButtons();
+        keepCustomTheme.checked = themeCustom.keep;
+        selectTheme.disabled = themeCustom.keep;
+        themeCustom.input.value = themeCustom.color;
+
+        switchDominantSpeakerFocus.checked = settings.dominant_speaker_focus;
+        switchNoiseSuppression.checked = settings.mic_noise_suppression;
+
+        screenOptimization.selectedIndex = settings.screen_optimization;
+        videoFps.selectedIndex = settings.video_fps;
+        screenFps.selectedIndex = settings.screen_fps;
+        BtnAspectRatio.selectedIndex = settings.aspect_ratio;
+        BtnVideoObjectFit.selectedIndex = settings.video_obj_fit;
+        BtnVideoControls.selectedIndex = settings.video_controls;
+        BtnsBarPosition.selectedIndex = settings.buttons_bar;
+        pinVideoPosition.selectedIndex = settings.pin_grid;
+        rc.handleVideoObjectFit(BtnVideoObjectFit.value);
+        rc.handleVideoControls(BtnVideoControls.value);
+        rc.changeBtnsBarPosition(BtnsBarPosition.value);
+        rc.toggleVideoPin(pinVideoPosition.value);
+        refreshMainButtonsToolTipPlacement();
+        resizeMainButtons();
+    } catch (error) {
+        console.warn('Unable to load settings from localStorage', error);
+    }
 }
 
 // ####################################################
