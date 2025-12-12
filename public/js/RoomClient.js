@@ -2811,6 +2811,11 @@ class RoomClient {
         const producer_id = this.producerLabel.get(type);
         const producer = this.producers.get(producer_id);
 
+        if (!producer) {
+            this.producerLabel.delete(type);
+            return console.warn('Producer already closed for this type ' + type);
+        }
+
         // Stop all tracks of the producer's stream
         if (producer && producer.track) {
             try {
@@ -2830,7 +2835,12 @@ class RoomClient {
 
         this.socket.emit('producerClosed', data);
 
-        this.producers.get(producer_id).close();
+        try {
+            producer.close();
+        } catch (err) {
+            console.warn('Error closing producer:', err);
+        }
+
         this.producers.delete(producer_id);
         this.producerLabel.delete(type);
 
@@ -2846,7 +2856,7 @@ class RoomClient {
             }
 
             const video = this.getId(producer_id);
-            this.removeVideoProducer(video, event);
+            this.removeVideoProducer(video, event, producer_id);
         }
 
         if (type === mediaType.audio) {
@@ -2926,16 +2936,37 @@ class RoomClient {
     // REMOVE PRODUCER VIDEO/AUDIO
     // ####################################################
 
-    removeVideoProducer(video, event) {
+    removeVideoProducer(video, event, producer_id) {
+        if (!video) {
+            return console.warn('[removeVideoProducer] element not found', producer_id);
+        }
+
         const d = this.getId(video.id + '__video');
         const vb = this.getId(video.id + '__vb');
 
-        video.srcObject.getTracks().forEach(function (track) {
-            track.stop();
-        });
-        video.parentNode.removeChild(video);
+        if (video.srcObject) {
+            video.srcObject.getTracks().forEach(function (track) {
+                track.stop();
+            });
+        }
 
+        if (video.parentNode) {
+            video.parentNode.removeChild(video);
+        } else {
+            console.warn('[removeVideoProducer] video parent not found', producer_id);
+            return;
+        }
+
+        if (!d || !d.parentNode) {
+            console.warn('[removeVideoProducer] video wrapper not found', producer_id);
+            return;
+        }
         d.parentNode.removeChild(d);
+
+        if (!vb || !vb.parentNode) {
+            console.warn('[removeVideoProducer] vb wrapper not found', producer_id);
+            return;
+        }
         vb.parentNode.removeChild(vb);
 
         handleAspectRatio();

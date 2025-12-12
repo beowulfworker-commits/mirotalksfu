@@ -2452,11 +2452,21 @@ function handleButtons() {
         await requestCamera();
         // await rc.resumeProducer(RoomClient.mediaType.video);
     });
-    bindClick('stopVideoButton', () => {
+    bindClick('stopVideoButton', async () => {
         if (!ensureRoomClient('stop video')) return;
         setVideoButtonsDisabled(true);
-        rc.closeProducer(RoomClient.mediaType.video);
-        // await rc.pauseProducer(RoomClient.mediaType.video);
+
+        try {
+            await rc.closeProducer(RoomClient.mediaType.video);
+            // await rc.pauseProducer(RoomClient.mediaType.video);
+        } catch (error) {
+            console.error('Error stopping video producer', error);
+        } finally {
+            video = false;
+            hide(stopVideoButton);
+            BUTTONS.main.startVideoButton && show(startVideoButton);
+            setVideoButtonsDisabled(false);
+        }
     });
 
     bindClick('startScreenButton', async () => {
