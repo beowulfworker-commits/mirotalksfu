@@ -284,6 +284,7 @@ const control = document.getElementById('control');
 const bottomButtons = document.getElementById('bottomButtons');
 const toggleExtraButton = document.getElementById('toggleExtraButton');
 const tabNotificationsBtn = document.getElementById('tabNotificationsBtn');
+const notifyAdminCleanBtn = document.getElementById('notifyAdminCleanBtn');
 
 let room_id = getRoomId();
 let room_password = getRoomPassword();
@@ -480,7 +481,9 @@ async function initClient() {
         setTippy('chatCloseButton', 'Close', 'bottom');
         setTippy('chatTogglePin', 'Toggle pin', 'bottom');
         setTippy('chatHideParticipantsList', 'Hide', 'bottom');
-        setTippy('chatShowParticipantsList', 'Toggle participants list', 'bottom');
+        if (document.getElementById('chatShowParticipantsList')) {
+            setTippy('chatShowParticipantsList', 'Toggle participants list', 'bottom');
+        }
         setTippy('chatMaxButton', 'Maximize', 'bottom');
         setTippy('chatMinButton', 'Minimize', 'bottom');
         setTippy('pollTogglePin', 'Toggle pin', 'bottom');
@@ -562,7 +565,9 @@ function refreshMainButtonsToolTipPlacement() {
         setTippy('raiseHandButton', 'Raise your hand', bPlacement);
         setTippy('lowerHandButton', 'Lower your hand', bPlacement);
         setTippy('chatButton', 'Toggle the chat', bPlacement);
-        setTippy('participantsButton', 'Toggle participants list', bPlacement);
+        if (document.getElementById('participantsButton')) {
+            setTippy('participantsButton', 'Toggle participants list', bPlacement);
+        }
         setTippy('settingsButton', 'Toggle the settings', bPlacement);
         setTippy('exitButton', 'Leave room', bPlacement);
     }
@@ -2032,6 +2037,13 @@ function ensureControlElements() {
     return false;
 }
 
+function bindClick(id, handler) {
+    const el = document.getElementById(id);
+    if (!el) return null;
+    el.addEventListener('click', handler);
+    return el;
+}
+
 function handleButtons() {
     if (buttonsHandlersInitialized) return;
     buttonsHandlersInitialized = true;
@@ -2046,7 +2058,7 @@ function handleButtons() {
     };
 
     // Lobby...
-    document.getElementById('lobbyUsers').addEventListener('click', function (event) {
+    bindClick('lobbyUsers', function (event) {
         switch (event.target.id) {
             case 'lobbyAcceptAllBtn':
                 rc.lobbyAcceptAll();
@@ -2070,307 +2082,326 @@ function handleButtons() {
     bottomButtons.onmouseout = () => {
         isButtonsBarOver = false;
     };
-    exitButton.onclick = () => {
+    bindClick('exitButton', () => {
         leaveRoom();
-    };
-    shareButton.onclick = () => {
+    });
+    const shareButton = bindClick('shareButton', () => {
         shareRoom(true);
-    };
-    shareButton.onmouseenter = () => {
-        if (isMobileDevice || !BUTTONS.popup.shareRoomQrOnHover) return;
-        show(qrRoomPopupContainer);
-    };
-    shareButton.onmouseleave = () => {
-        if (isMobileDevice || !BUTTONS.popup.shareRoomQrOnHover) return;
-        hide(qrRoomPopupContainer);
-    };
-    hideMeButton.onclick = (e) => {
+    });
+    if (shareButton) {
+        shareButton.onmouseenter = () => {
+            if (isMobileDevice || !BUTTONS.popup.shareRoomQrOnHover) return;
+            show(qrRoomPopupContainer);
+        };
+        shareButton.onmouseleave = () => {
+            if (isMobileDevice || !BUTTONS.popup.shareRoomQrOnHover) return;
+            hide(qrRoomPopupContainer);
+        };
+    }
+    bindClick('hideMeButton', (e) => {
         if (isHideALLVideosActive) {
             return userLog('warning', 'To use this feature, please toggle video focus mode', 'top-end', 6000);
         }
         isHideMeActive = !isHideMeActive;
         rc.handleHideMe();
         hideClassElements('videoMenuBar');
-    };
-    settingsButton.onclick = () => {
+    });
+    bindClick('settingsButton', () => {
         rc.toggleMySettings();
-    };
-    mySettingsCloseBtn.onclick = () => {
+    });
+    bindClick('mySettingsCloseBtn', () => {
         rc.toggleMySettings();
-    };
-    tabVideoDevicesBtn.onclick = (e) => {
+    });
+    bindClick('tabVideoDevicesBtn', (e) => {
         rc.openTab(e, 'tabVideoDevices');
-    };
-    tabAudioDevicesBtn.onclick = (e) => {
+    });
+    bindClick('tabAudioDevicesBtn', (e) => {
         rc.openTab(e, 'tabAudioDevices');
-    };
-    tabRecordingBtn.onclick = (e) => {
+    });
+    bindClick('tabRecordingBtn', (e) => {
         rc.openTab(e, 'tabRecording');
-    };
-    tabRoomBtn.onclick = (e) => {
+    });
+    bindClick('tabRoomBtn', (e) => {
         rc.openTab(e, 'tabRoom');
-    };
-    tabVideoShareBtn.onclick = (e) => {
+    });
+    bindClick('tabVideoShareBtn', (e) => {
         rc.openTab(e, 'tabVideoShare');
-    };
-    tabRTMPStreamingBtn.onclick = (e) => {
+    });
+    bindClick('tabRTMPStreamingBtn', (e) => {
         rc.getRTMP();
         rc.openTab(e, 'tabRTMPStreaming');
-    };
-    refreshVideoFiles.onclick = () => {
+    });
+    bindClick('refreshVideoFiles', () => {
         rc.getRTMP();
         userLog('info', 'Refreshed video files', 'top-end');
-    };
-    tabAspectBtn.onclick = (e) => {
+    });
+    bindClick('tabAspectBtn', (e) => {
         rc.openTab(e, 'tabAspect');
-    };
-    if (tabNotificationsBtn) {
-        tabNotificationsBtn.onclick = (e) => {
-            rc.openTab(e, 'tabNotifications');
-        };
-    }
-    tabModeratorBtn.onclick = (e) => {
+    });
+    bindClick('tabNotificationsBtn', (e) => {
+        rc.openTab(e, 'tabNotifications');
+    });
+    bindClick('tabModeratorBtn', (e) => {
         rc.openTab(e, 'tabModerator');
-    };
-    tabProfileBtn.onclick = (e) => {
+    });
+    bindClick('tabProfileBtn', (e) => {
         rc.openTab(e, 'tabProfile');
-    };
-    tabShortcutsBtn.onclick = (e) => {
+    });
+    bindClick('tabShortcutsBtn', (e) => {
         rc.openTab(e, 'tabShortcuts');
-    };
-    tabStylingBtn.onclick = (e) => {
+    });
+    bindClick('tabStylingBtn', (e) => {
         rc.openTab(e, 'tabStyling');
-    };
-    tabLanguagesBtn.onclick = (e) => {
+    });
+    bindClick('tabLanguagesBtn', (e) => {
         rc.openTab(e, 'tabLanguages');
-    };
-    notifyEmailCleanBtn.onclick = () => {
+    });
+    bindClick('notifyEmailCleanBtn', () => {
         rc.cleanNotifications();
         rc.saveNotifications(false);
-    };
-    saveNotificationsBtn.onclick = () => {
+    });
+    bindClick('notifyAdminCleanBtn', () => {
+        rc.cleanNotifications();
+        rc.saveNotifications(false);
+    });
+    bindClick('saveNotificationsBtn', () => {
         rc.saveNotifications();
-    };
-    tabVideoAIBtn.onclick = (e) => {
+    });
+    bindClick('tabVideoAIBtn', (e) => {
         rc.openTab(e, 'tabVideoAI');
         rc.getAvatarList();
         rc.getVoiceList();
-    };
-    avatarVideoAIStart.onclick = (e) => {
+    });
+    bindClick('avatarVideoAIStart', (e) => {
         rc.stopSession();
         rc.handleVideoAI();
         rc.toggleMySettings();
-    };
-    switchAvatars.onchange = (e) => {
-        showFreeAvatars = e.currentTarget.checked;
-        rc.getAvatarList();
-    };
-    avatarQuality.selectedIndex = 1;
-    avatarQuality.onchange = (e) => {
-        VideoAI.quality = e.target.value;
-    };
-    refreshVideoDevices.onclick = async () => {
+    });
+    const switchAvatars = document.getElementById('switchAvatars');
+    if (switchAvatars) {
+        switchAvatars.onchange = (e) => {
+            showFreeAvatars = e.currentTarget.checked;
+            rc.getAvatarList();
+        };
+    }
+    const avatarQuality = document.getElementById('avatarQuality');
+    if (avatarQuality) {
+        avatarQuality.selectedIndex = 1;
+        avatarQuality.onchange = (e) => {
+            VideoAI.quality = e.target.value;
+        };
+    }
+    bindClick('refreshVideoDevices', async () => {
         await refreshMyVideoDevices();
         userLog('info', 'Refreshed video devices', 'top-end');
-    };
-    refreshAudioDevices.onclick = async () => {
+    });
+    bindClick('refreshAudioDevices', async () => {
         await refreshMyAudioDevices();
         userLog('info', 'Refreshed audio devices', 'top-end');
-    };
-    speakerTestBtn.onclick = () => {
+    });
+    bindClick('speakerTestBtn', () => {
         sound('ring', true);
-    };
-    roomId.onclick = () => {
+    });
+    bindClick('roomId', () => {
         isMobileDevice ? shareRoom(true) : copyRoomURL();
-    };
-    roomSendEmail.onclick = () => {
+    });
+    bindClick('roomSendEmail', () => {
         shareRoomByEmail();
-    };
-    chatButton.onclick = () => {
+    });
+    bindClick('chatButton', () => {
         rc.toggleChat();
-    };
-    participantsButton.onclick = async () => {
+    });
+    bindClick('participantsButton', async () => {
         rc.toggleParticipants();
-    };
+    });
     // Polls
-    pollButton.onclick = () => {
+    bindClick('pollButton', () => {
         rc.togglePoll();
-    };
-    pollMaxButton.onclick = () => {
+    });
+    bindClick('pollMaxButton', () => {
         rc.pollMaximize();
-    };
-    pollMinButton.onclick = () => {
+    });
+    bindClick('pollMinButton', () => {
         rc.pollMinimize();
-    };
-    pollCloseBtn.onclick = () => {
+    });
+    bindClick('pollCloseBtn', () => {
         rc.togglePoll();
-    };
-    pollTogglePin.onclick = () => {
+    });
+    bindClick('pollTogglePin', () => {
         rc.togglePollPin();
-    };
-    pollSaveButton.onclick = () => {
+    });
+    bindClick('pollSaveButton', () => {
         rc.pollSaveResults();
-    };
-    pollAddOptionBtn.onclick = () => {
+    });
+    bindClick('pollAddOptionBtn', () => {
         rc.pollAddOptions();
-    };
-    pollDelOptionBtn.onclick = () => {
+    });
+    bindClick('pollDelOptionBtn', () => {
         rc.pollDeleteOptions();
-    };
-    pollCreateForm.onsubmit = (e) => {
-        rc.pollCreateNewForm(e);
-    };
-    editorButton.onclick = () => {
+    });
+    const pollCreateForm = document.getElementById('pollCreateForm');
+    if (pollCreateForm) {
+        pollCreateForm.onsubmit = (e) => {
+            rc.pollCreateNewForm(e);
+        };
+    }
+    bindClick('editorButton', () => {
         rc.toggleEditor();
         if (isPresenter && !rc.editorIsLocked()) {
             rc.editorSendAction('open');
         }
-    };
-    editorCloseBtn.onclick = () => {
+    });
+    bindClick('editorCloseBtn', () => {
         rc.toggleEditor();
         if (isPresenter && !rc.editorIsLocked()) {
             rc.editorSendAction('close');
         }
-    };
-    editorTogglePin.onclick = () => {
+    });
+    bindClick('editorTogglePin', () => {
         rc.toggleEditorPin();
-    };
-    editorLockBtn.onclick = () => {
+    });
+    bindClick('editorLockBtn', () => {
         rc.toggleLockUnlockEditor();
-    };
-    editorUnlockBtn.onclick = () => {
+    });
+    bindClick('editorUnlockBtn', () => {
         rc.toggleLockUnlockEditor();
-    };
-    editorCleanBtn.onclick = () => {
+    });
+    bindClick('editorCleanBtn', () => {
         rc.editorClean();
-    };
-    editorCopyBtn.onclick = () => {
+    });
+    bindClick('editorCopyBtn', () => {
         rc.editorCopy();
-    };
-    editorSaveBtn.onclick = () => {
+    });
+    bindClick('editorSaveBtn', () => {
         rc.editorSave();
-    };
-    editorUndoBtn.onclick = () => {
+    });
+    bindClick('editorUndoBtn', () => {
         rc.editorUndo();
-    };
-    editorRedoBtn.onclick = () => {
+    });
+    bindClick('editorRedoBtn', () => {
         rc.editorRedo();
-    };
-    transcriptionButton.onclick = () => {
+    });
+    bindClick('transcriptionButton', () => {
         transcription.toggle();
-    };
-    transcriptionCloseBtn.onclick = () => {
+    });
+    bindClick('transcriptionCloseBtn', () => {
         transcription.toggle();
-    };
-    transcriptionTogglePinBtn.onclick = () => {
+    });
+    bindClick('transcriptionTogglePinBtn', () => {
         transcription.togglePinUnpin();
-    };
-    transcriptionMaxBtn.onclick = () => {
+    });
+    bindClick('transcriptionMaxBtn', () => {
         transcription.maximize();
-    };
-    transcriptionMinBtn.onclick = () => {
+    });
+    bindClick('transcriptionMinBtn', () => {
         transcription.minimize();
-    };
-    transcriptionAllBtn.onclick = () => {
+    });
+    bindClick('transcriptionAllBtn', () => {
         transcription.startAll();
-    };
-    transcriptionGhostBtn.onclick = () => {
+    });
+    bindClick('transcriptionGhostBtn', () => {
         transcription.toggleBg();
-    };
-    transcriptionSaveBtn.onclick = () => {
+    });
+    bindClick('transcriptionSaveBtn', () => {
         transcription.save();
-    };
-    transcriptionCleanBtn.onclick = () => {
+    });
+    bindClick('transcriptionCleanBtn', () => {
         transcription.delete();
-    };
-    chatHideParticipantsList.onclick = (e) => {
+    });
+    bindClick('chatHideParticipantsList', (e) => {
         rc.toggleShowParticipants();
-    };
-    chatShowParticipantsList.onclick = (e) => {
+    });
+    bindClick('chatShowParticipantsList', (e) => {
         rc.toggleShowParticipants();
-    };
-    chatShareRoomBtn.onclick = (e) => {
+    });
+    bindClick('chatShareRoomBtn', (e) => {
         shareRoom(true);
-    };
-    chatGhostButton.onclick = (e) => {
+    });
+    bindClick('chatGhostButton', (e) => {
         rc.chatToggleBg();
-    };
-    chatCleanButton.onclick = () => {
+    });
+    bindClick('chatCleanButton', () => {
         rc.chatClean();
-    };
-    chatSaveButton.onclick = () => {
+    });
+    bindClick('chatSaveButton', () => {
         rc.chatSave();
-    };
-    chatCloseButton.onclick = () => {
+    });
+    bindClick('chatCloseButton', () => {
         rc.toggleChat();
-    };
-    chatTogglePin.onclick = () => {
+    });
+    bindClick('chatTogglePin', () => {
         rc.toggleChatPin();
-    };
-    chatMaxButton.onclick = () => {
+    });
+    bindClick('chatMaxButton', () => {
         rc.chatMaximize();
-    };
-    chatMinButton.onclick = () => {
+    });
+    bindClick('chatMinButton', () => {
         rc.chatMinimize();
-    };
-    chatCleanTextButton.onclick = () => {
+    });
+    bindClick('chatCleanTextButton', () => {
         rc.cleanMessage();
-    };
-    chatPasteButton.onclick = () => {
+    });
+    bindClick('chatPasteButton', () => {
         rc.pasteMessage();
-    };
-    chatSendButton.onclick = () => {
+    });
+    bindClick('chatSendButton', () => {
         rc.sendMessage();
-    };
-    chatEmojiButton.onclick = () => {
+    });
+    bindClick('chatEmojiButton', () => {
         rc.toggleChatEmoji();
-    };
-    chatMarkdownButton.onclick = () => {
-        isChatMarkdownOn = !isChatMarkdownOn;
-        setColor(chatMarkdownButton, isChatMarkdownOn ? 'lime' : 'white');
-    };
-    chatSpeechStartButton.onclick = () => {
+    });
+    const chatMarkdownButton = document.getElementById('chatMarkdownButton');
+    if (chatMarkdownButton) {
+        chatMarkdownButton.onclick = () => {
+            isChatMarkdownOn = !isChatMarkdownOn;
+            setColor(chatMarkdownButton, isChatMarkdownOn ? 'lime' : 'white');
+        };
+    }
+    bindClick('chatSpeechStartButton', () => {
         startSpeech();
-    };
-    chatSpeechStopButton.onclick = () => {
+    });
+    bindClick('chatSpeechStopButton', () => {
         stopSpeech();
-    };
-    transcriptionSpeechStart.onclick = () => {
+    });
+    bindClick('transcriptionSpeechStart', () => {
         transcription.start();
-    };
-    transcriptionSpeechStop.onclick = () => {
+    });
+    bindClick('transcriptionSpeechStop', () => {
         transcription.stop();
-    };
-    fullScreenButton.onclick = () => {
+    });
+    bindClick('fullScreenButton', () => {
         rc.toggleRoomFullScreen();
-    };
-    recordingImage.onclick = () => {
-        isRecording ? stopRecButton.click() : startRecButton.click();
-    };
-    startRecButton.onclick = () => {
+    });
+    const recordingImage = document.getElementById('recordingImage');
+    const startRecButton = bindClick('startRecButton', () => {
         rc.startRecording();
-    };
-    stopRecButton.onclick = () => {
+    });
+    const stopRecButton = bindClick('stopRecButton', () => {
         rc.stopRecording();
-    };
-    pauseRecButton.onclick = () => {
+    });
+    bindClick('pauseRecButton', () => {
         rc.pauseRecording();
-    };
-    resumeRecButton.onclick = () => {
+    });
+    bindClick('resumeRecButton', () => {
         rc.resumeRecording();
-    };
-    swapCameraButton.onclick = () => {
+    });
+    if (recordingImage && startRecButton && stopRecButton) {
+        recordingImage.onclick = () => {
+            isRecording ? stopRecButton.click() : startRecButton.click();
+        };
+    }
+    bindClick('swapCameraButton', () => {
         if (isHideMeActive) rc.handleHideMe();
         rc.closeThenProduce(RoomClient.mediaType.video, null, true);
-    };
-    raiseHandButton.onclick = () => {
+    });
+    bindClick('raiseHandButton', () => {
         rc.updatePeerInfo(peer_name, socket.id, 'hand', true);
         hideClassElements('videoMenuBar');
-    };
-    lowerHandButton.onclick = () => {
+    });
+    bindClick('lowerHandButton', () => {
         rc.updatePeerInfo(peer_name, socket.id, 'hand', false);
-    };
-    toggleExtraButton.onclick = () => {
+    });
+    const extraButton = bindClick('toggleExtraButton', () => {
         toggleExtraButtons();
         if (!isMobileDevice) {
             isToggleExtraBtnClicked = true;
@@ -2378,14 +2409,16 @@ function handleButtons() {
                 isToggleExtraBtnClicked = false;
             }, 2000);
         }
-    };
-    toggleExtraButton.onmouseover = () => {
-        if (isToggleExtraBtnClicked || isMobileDevice) return;
-        if (control.style.display === 'none') {
-            toggleExtraButtons();
-        }
-    };
-    startAudioButton.onclick = async () => {
+    });
+    if (extraButton) {
+        extraButton.onmouseover = () => {
+            if (isToggleExtraBtnClicked || isMobileDevice) return;
+            if (control && control.style.display === 'none') {
+                toggleExtraButtons();
+            }
+        };
+    }
+    bindClick('startAudioButton', async () => {
         if (!ensureRoomClient('start audio')) return;
 
         const moderator = rc.getModerator();
@@ -2394,8 +2427,8 @@ function handleButtons() {
         }
         if (isPushToTalkActive) return;
         await requestMicrophone();
-    };
-    stopAudioButton.onclick = async () => {
+    });
+    bindClick('stopAudioButton', async () => {
         if (!ensureRoomClient('stop audio')) return;
         if (isPushToTalkActive) return;
         setAudioButtonsDisabled(true);
@@ -2408,8 +2441,8 @@ function handleButtons() {
             : await rc.closeProducer(RoomClient.mediaType.audio);
 
         rc.updatePeerInfo(peer_name, socket.id, 'audio', false);
-    };
-    startVideoButton.onclick = async () => {
+    });
+    bindClick('startVideoButton', async () => {
         if (!ensureRoomClient('start video')) return;
 
         const moderator = rc.getModerator();
@@ -2418,15 +2451,15 @@ function handleButtons() {
         }
         await requestCamera();
         // await rc.resumeProducer(RoomClient.mediaType.video);
-    };
-    stopVideoButton.onclick = () => {
+    });
+    bindClick('stopVideoButton', () => {
         if (!ensureRoomClient('stop video')) return;
         setVideoButtonsDisabled(true);
         rc.closeProducer(RoomClient.mediaType.video);
         // await rc.pauseProducer(RoomClient.mediaType.video);
-    };
+    });
 
-    startScreenButton.onclick = async () => {
+    bindClick('startScreenButton', async () => {
         if (!ensureRoomClient('start screen')) return;
 
         const moderator = rc.getModerator();
@@ -2434,153 +2467,156 @@ function handleButtons() {
             return userLog('warning', 'The moderator does not allow you to share the screen', 'top-end', 6000);
         }
         await rc.produce(RoomClient.mediaType.screen);
-    };
-    stopScreenButton.onclick = () => {
+    });
+    bindClick('stopScreenButton', () => {
         if (!ensureRoomClient('stop screen')) return;
         rc.closeProducer(RoomClient.mediaType.screen);
-    };
-    copyRtmpUrlButton.onclick = () => {
+    });
+    bindClick('copyRtmpUrlButton', () => {
         rc.copyRTMPUrl(rtmpLiveUrl.value);
-    };
-    startRtmpButton.onclick = () => {
+    });
+    bindClick('startRtmpButton', () => {
         if (rc.selectedRtmpFilename == '') {
             userLog('warning', 'Please select the Video file to stream', 'top-end', 6000);
             return;
         }
         rc.startRTMP();
-    };
-    stopRtmpButton.onclick = () => {
+    });
+    bindClick('stopRtmpButton', () => {
         rc.stopRTMP();
-    };
-    streamerRtmpButton.onclick = () => {
+    });
+    bindClick('streamerRtmpButton', () => {
         rc.openRTMPStreamer();
-    };
-    startRtmpURLButton.onclick = () => {
+    });
+    bindClick('startRtmpURLButton', () => {
         rc.startRTMPfromURL(rtmpStreamURL.value);
-    };
-    stopRtmpURLButton.onclick = () => {
+    });
+    bindClick('stopRtmpURLButton', () => {
         rc.stopRTMPfromURL();
-    };
-    activeRoomsButton.onclick = () => {
+    });
+    bindClick('activeRoomsButton', () => {
         rc.showActiveRooms();
-    };
-    fileShareButton.onclick = () => {
+    });
+    bindClick('fileShareButton', () => {
         rc.selectFileToShare(socket.id, true);
-    };
-    videoShareButton.onclick = () => {
+    });
+    bindClick('videoShareButton', () => {
         rc.shareVideo('all');
-    };
-    videoCloseBtn.onclick = () => {
+    });
+    bindClick('videoCloseBtn', () => {
         if (rc._moderator.media_cant_sharing) {
             return userLog('warning', 'The moderator does not allow you close this media', 'top-end', 6000);
         }
         rc.closeVideo(true);
-    };
-    sendAbortBtn.onclick = () => {
+    });
+    bindClick('sendAbortBtn', () => {
         rc.abortFileTransfer();
-    };
-    receiveAbortBtn.onclick = () => {
+    });
+    bindClick('receiveAbortBtn', () => {
         rc.abortReceiveFileTransfer();
-    };
-    receiveHideBtn.onclick = () => {
+    });
+    bindClick('receiveHideBtn', () => {
         rc.hideFileTransfer();
-    };
-    whiteboardButton.onclick = () => {
+    });
+    bindClick('whiteboardButton', () => {
         toggleWhiteboard();
-    };
-    documentPiPButton.onclick = () => {
+    });
+    bindClick('documentPiPButton', () => {
         rc.toggleDocumentPIP();
-    };
-    snapshotRoomButton.onclick = () => {
+    });
+    bindClick('snapshotRoomButton', () => {
         rc.snapshotRoom();
-    };
-    whiteboardPencilBtn.onclick = () => {
+    });
+    bindClick('whiteboardPencilBtn', () => {
         whiteboardIsDrawingMode(true);
-    };
-    whiteboardVanishingBtn.onclick = () => {
+    });
+    bindClick('whiteboardVanishingBtn', () => {
         whiteboardIsVanishingMode(true);
-    };
-    whiteboardObjectBtn.onclick = () => {
+    });
+    bindClick('whiteboardObjectBtn', () => {
         whiteboardIsDrawingMode(false);
-    };
-    whiteboardUndoBtn.onclick = () => {
+    });
+    bindClick('whiteboardUndoBtn', () => {
         whiteboardAction(getWhiteboardAction('undo'));
-    };
-    whiteboardRedoBtn.onclick = () => {
+    });
+    bindClick('whiteboardRedoBtn', () => {
         whiteboardAction(getWhiteboardAction('redo'));
-    };
-    whiteboardSaveBtn.onclick = () => {
+    });
+    bindClick('whiteboardSaveBtn', () => {
         wbCanvasSaveImg();
-    };
-    whiteboardImgFileBtn.onclick = () => {
+    });
+    bindClick('whiteboardImgFileBtn', () => {
         whiteboardAddObj('imgFile');
-    };
-    whiteboardPdfFileBtn.onclick = () => {
+    });
+    bindClick('whiteboardPdfFileBtn', () => {
         whiteboardAddObj('pdfFile');
-    };
-    whiteboardImgUrlBtn.onclick = () => {
+    });
+    bindClick('whiteboardImgUrlBtn', () => {
         whiteboardAddObj('imgUrl');
-    };
-    whiteboardTextBtn.onclick = () => {
+    });
+    bindClick('whiteboardTextBtn', () => {
         whiteboardAddObj('text');
-    };
-    whiteboardStickyNoteBtn.onclick = () => {
+    });
+    bindClick('whiteboardStickyNoteBtn', () => {
         whiteboardAddObj('stickyNote');
-    };
-    whiteboardLineBtn.onclick = () => {
+    });
+    bindClick('whiteboardLineBtn', () => {
         whiteboardAddObj('line');
-    };
-    whiteboardRectBtn.onclick = () => {
+    });
+    bindClick('whiteboardRectBtn', () => {
         whiteboardAddObj('rect');
-    };
-    whiteboardTriangleBtn.onclick = () => {
+    });
+    bindClick('whiteboardTriangleBtn', () => {
         whiteboardAddObj('triangle');
-    };
-    whiteboardCircleBtn.onclick = () => {
+    });
+    bindClick('whiteboardCircleBtn', () => {
         whiteboardAddObj('circle');
-    };
-    whiteboardEraserBtn.onclick = () => {
+    });
+    bindClick('whiteboardEraserBtn', () => {
         whiteboardIsEraser(true);
-    };
-    whiteboardCleanBtn.onclick = () => {
+    });
+    bindClick('whiteboardCleanBtn', () => {
         confirmClearBoard();
-    };
-    whiteboardShortcutsBtn.onclick = () => {
+    });
+    bindClick('whiteboardShortcutsBtn', () => {
         showWhiteboardShortcuts();
-    };
-    whiteboardCloseBtn.onclick = () => {
+    });
+    bindClick('whiteboardCloseBtn', () => {
         whiteboardAction(getWhiteboardAction('close'));
-    };
-    whiteboardLockBtn.onclick = () => {
+    });
+    bindClick('whiteboardLockBtn', () => {
         toggleLockUnlockWhiteboard();
-    };
-    whiteboardUnlockBtn.onclick = () => {
+    });
+    bindClick('whiteboardUnlockBtn', () => {
         toggleLockUnlockWhiteboard();
-    };
-    participantsSaveBtn.onclick = () => {
+    });
+    bindClick('participantsSaveBtn', () => {
         saveRoomPeers();
-    };
-    participantsUnreadMessagesBtn.onclick = () => {
+    });
+    bindClick('participantsUnreadMessagesBtn', () => {
         rc.toggleUnreadMsg();
-    };
-    participantsRaiseHandBtn.onclick = () => {
+    });
+    bindClick('participantsRaiseHandBtn', () => {
         rc.toggleRaiseHands();
-    };
-    searchParticipantsFromList.onkeyup = () => {
-        rc.searchPeer();
-    };
-    lockRoomButton.onclick = () => {
+    });
+    const searchParticipantsFromList = document.getElementById('searchParticipantsFromList');
+    if (searchParticipantsFromList) {
+        searchParticipantsFromList.onkeyup = () => {
+            rc.searchPeer();
+        };
+    }
+    bindClick('lockRoomButton', () => {
         rc.roomAction('lock');
-    };
-    unlockRoomButton.onclick = () => {
+    });
+    bindClick('unlockRoomButton', () => {
         rc.roomAction('unlock');
-    };
-    aboutButton.onclick = () => {
+    });
+    bindClick('aboutButton', () => {
         showAbout();
-    };
-    restartICEButton.onclick = async () => {
+    });
+    bindClick('restartICEButton', async () => {
         await rc.restartIce();
-    };
+    });
 }
 
 // ####################################################
