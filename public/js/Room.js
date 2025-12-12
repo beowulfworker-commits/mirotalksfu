@@ -250,6 +250,11 @@ let lobbyParticipantsCount = 0;
 let chatMessagesId = 0;
 let buttonsHandlersInitialized = false;
 
+// Cache frequently used control elements to avoid relying on implicit globals.
+const control = document.getElementById('control');
+const bottomButtons = document.getElementById('bottomButtons');
+const toggleExtraButton = document.getElementById('toggleExtraButton');
+
 let room_id = getRoomId();
 let room_password = getRoomPassword();
 let room_duration = getRoomDuration();
@@ -1990,9 +1995,18 @@ function stopRecordingTimer() {
 // HTML BUTTONS
 // ####################################################
 
+function ensureControlElements() {
+    if (control && bottomButtons && toggleExtraButton) return true;
+
+    console.warn('Control bar elements are missing in the DOM.');
+    return false;
+}
+
 function handleButtons() {
     if (buttonsHandlersInitialized) return;
     buttonsHandlersInitialized = true;
+
+    if (!ensureControlElements()) return;
 
     const ensureRoomClient = (action) => {
         if (rc) return true;
@@ -4155,6 +4169,8 @@ function handleDropdownHover(dropdownElement = null) {
 }
 
 function showButtons() {
+    if (!ensureControlElements()) return;
+
     if (
         isButtonsBarOver ||
         isButtonsVisible ||
@@ -4169,6 +4185,8 @@ function showButtons() {
 }
 
 function checkButtonsBar() {
+    if (!ensureControlElements()) return;
+
     bottomButtons.style.display = 'flex';
     isButtonsVisible = true;
 
@@ -4185,6 +4203,8 @@ function checkButtonsBar() {
 }
 
 function toggleExtraButtons() {
+    if (!ensureControlElements()) return;
+
     const isControlHidden = control.style.display === 'none' || control.style.display === '';
     const displayValue = isControlHidden ? 'flex' : 'none';
     const iconHtml = isControlHidden ? icons.up : icons.down;
