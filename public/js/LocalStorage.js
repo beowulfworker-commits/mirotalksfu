@@ -157,6 +157,12 @@ class LocalStorage {
     }
 
     getObjectLocalStorage(name) {
-        return JSON.parse(localStorage.getItem(name));
+        try {
+            const value = localStorage.getItem(name);
+            return value ? JSON.parse(value) : null;
+        } catch (error) {
+            console.warn(`Failed to parse localStorage item: ${name}`, error);
+            return null;
+        }
     }
 }
