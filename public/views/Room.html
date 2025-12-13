@@ -152,7 +152,7 @@
         </div>
 
         <section>
-                <div id="initUser" class="init-user hidden">
+            <div id="initUser" class="init-user hidden">
                 <div id="initVideoContainer" class="init-video-container">
                     <video
                         id="initVideo"
@@ -173,10 +173,7 @@
                             <button id="initAudioButton" class="fas fa-microphone"></button>
                             <button id="initStartScreenButton" class="fas fa-desktop hidden"></button>
                             <button id="initStopScreenButton" class="fas fa-stop-circle hidden"></button>
-                            <button
-                                id="initVideoMirrorButton"
-                                class="fas fa-arrow-right-arrow-left hidden"
-                            ></button>
+                            <button id="initVideoMirrorButton" class="fas fa-arrow-right-arrow-left hidden"></button>
                             <button id="initVirtualBackgroundButton" class="fa-solid fa-image hidden"></button>
                             <button id="initUsernameEmojiButton" class="fas fa-smile"></button>
                         </div>
@@ -248,21 +245,27 @@
 
         <div id="bottomButtons" class="fadein">
             <button id="toggleExtraButton" class="hidden"><i class="fas fa-chevron-down"></i></button>
-            <button id="startAudioButton" class="hidden media-start-button">
+            <button id="startAudioButton" class="hidden media-start-button" aria-label="Audio">
                 <i class="fas fa-microphone-slash"></i>
             </button>
-            <button id="stopAudioButton" class="hidden"><i class="fas fa-microphone"></i></button>
-            <button id="startVideoButton" class="hidden media-start-button">
+            <button id="stopAudioButton" class="hidden" aria-label="Audio">
+                <i class="fas fa-microphone"></i>
+            </button>
+            <button id="startVideoButton" class="hidden media-start-button" aria-label="Camera">
                 <i class="fas fa-video-slash"></i>
             </button>
-            <button id="stopVideoButton" class="hidden"><i class="fas fa-video"></i></button>
+            <button id="stopVideoButton" class="hidden" aria-label="Camera">
+                <i class="fas fa-video"></i>
+            </button>
             <button id="swapCameraButton" class="hidden"><i class="fas fa-camera-rotate"></i></button>
             <button id="startScreenButton" class="hidden"><i class="fas fa-desktop"></i></button>
             <button id="stopScreenButton" class="hidden"><i class="fas fa-stop-circle"></i></button>
             <button id="raiseHandButton" class="hidden"><i class="fas fa-hand-paper"></i></button>
             <button id="lowerHandButton" class="hidden"><i id="lowerHandIcon" class="fas fa-hand-paper"></i></button>
-            <button id="chatButton" class="hidden"><i class="fas fa-comments"></i></button>
-            <button id="settingsButton" class="hidden"><i class="fas fa-cogs"></i></button>
+            <button id="chatButton" class="hidden" aria-label="Chat"><i class="fas fa-comments"></i></button>
+            <button id="settingsButton" class="hidden" aria-label="Settings">
+                <i class="fas fa-cogs"></i>
+            </button>
             <button id="exitButton" class="hidden"><i class="fa-solid fa-phone-slash"></i></button>
         </div>
 
@@ -336,7 +339,7 @@
                         <br />
                         <button id="lockRoomButton" class="hidden btn-custom">
                             <i class="fas fa-lock-open orange"></i>
-                            <p class="orange">Закрыть комнату/p>
+                            <p class="orange">Закрыть комнату/p></p>
                         </button>
                         <button id="unlockRoomButton" class="hidden btn-custom">
                             <i class="fas fa-lock red"></i>
@@ -1358,8 +1361,12 @@
                             <i class="fas fa-ellipsis-vertical"></i>
                         </button>
                         <div class="dropdown-menu text-start" aria-labelledby="whiteboardDropDownMenu">
-                            <button id="whiteboardImgFileBtn"><i class="far fa-image"></i> Добавить файл изображения</button>
-                            <button id="whiteboardImgUrlBtn"><i class="fas fa-link"></i> Добавить URL изображения</button>
+                            <button id="whiteboardImgFileBtn">
+                                <i class="far fa-image"></i> Добавить файл изображения
+                            </button>
+                            <button id="whiteboardImgUrlBtn">
+                                <i class="fas fa-link"></i> Добавить URL изображения
+                            </button>
                             <button id="whiteboardPdfFileBtn"><i class="far fa-file-pdf"></i> Добавить PDF-файл</button>
                             <button id="whiteboardTextBtn"><i class="fas fa-spell-check"></i> Добавить текст</button>
                             <button id="whiteboardLineBtn"><i class="fas fa-slash"></i> Добавить линию</button>
@@ -1700,10 +1707,14 @@
                                     </button>
                                 </li>
                                 <li>
-                                    <button id="transcriptionSaveBtn"><i class="fas fa-save"></i>&nbsp;Сохранить</button>
+                                    <button id="transcriptionSaveBtn">
+                                        <i class="fas fa-save"></i>&nbsp;Сохранить
+                                    </button>
                                 </li>
                                 <li>
-                                    <button id="transcriptionCleanBtn"><i class="fas fa-trash"></i>&nbsp;Очистить</button>
+                                    <button id="transcriptionCleanBtn">
+                                        <i class="fas fa-trash"></i>&nbsp;Очистить
+                                    </button>
                                 </li>
                             </ul>
                         </div>

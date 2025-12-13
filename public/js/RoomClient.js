@@ -14,7 +14,7 @@
  */
 
 const cfg = {
-    useAvatarSvg: false,
+    useAvatarSvg: true,
 };
 
 const html = {
@@ -571,11 +571,16 @@ class RoomClient {
         this.socket.emit('getProducers'); // newProducers
         // ###############################################
 
-        if (isBroadcastingEnabled) {
-            isPresenter ? await this.startLocalMedia() : this.handleRoomBroadcasting();
-        } else {
-            await this.startLocalMedia();
+        if (isBroadcastingEnabled && !isPresenter) {
+            this.handleRoomBroadcasting();
         }
+
+        if (this.joinRoomWithScreen && !this._moderator.screen_cant_share) {
+            await this.produce(mediaType.screen, null, false, true);
+            console.log('11 ----> START SCREEN MEDIA');
+        }
+
+        this.handleInitialMediaState();
     }
 
     async loadDeviceAndInitTransports() {
@@ -1659,6 +1664,22 @@ class RoomClient {
         }
 
         console.log('[startLocalMedia] - PRODUCER LABEL', this.producerLabel);
+    }
+
+    handleInitialMediaState() {
+        this.setIsAudio(this.peer_id, false);
+
+        const hasLocalVideo = this.producerExist(mediaType.video) || this.producerExist(mediaType.screen);
+
+        if (!hasLocalVideo) {
+            if (isBroadcastingEnabled && !isPresenter) {
+                this.setVideoOff(this.peer_info, false);
+                this.sendVideoOff();
+            } else {
+                this.setIsVideo(false);
+            }
+            console.log('10 ----> INITIAL VIDEO IS OFF');
+        }
     }
 
     async pauseAudioProducer() {
@@ -3127,28 +3148,52 @@ class RoomClient {
                 eDiv.className = 'expand-video';
                 eDiv.id = remotePeerId + '_videoExpand';
 
-                eBtn = this.getId(remotePeerId + '_videoExpandBtn') ||
+                eBtn =
+                    this.getId(remotePeerId + '_videoExpandBtn') ||
                     this.createButton(remotePeerId + '_videoExpandBtn', html.expand);
 
                 eVc = this.getId(remotePeerId + '_videoExpandContent') || document.createElement('div');
                 eVc.className = 'expand-video-content';
                 eVc.id = remotePeerId + '_videoExpandContent';
 
-                pip = this.getId(remotePeerId + '__pictureInPicture') ||
+                pip =
+                    this.getId(remotePeerId + '__pictureInPicture') ||
                     this.createButton(remotePeerId + '__pictureInPicture', html.pip);
-                mv = this.getId(remotePeerId + '__videoMirror') || this.createButton(remotePeerId + '__videoMirror', html.mirror);
-                fs = this.getId(remotePeerId + '__fullScreen') || this.createButton(remotePeerId + '__fullScreen', html.fullScreen);
-                ts = this.getId(remotePeerId + '__snapshot') || this.createButton(remotePeerId + '__snapshot', html.snapshot);
+                mv =
+                    this.getId(remotePeerId + '__videoMirror') ||
+                    this.createButton(remotePeerId + '__videoMirror', html.mirror);
+                fs =
+                    this.getId(remotePeerId + '__fullScreen') ||
+                    this.createButton(remotePeerId + '__fullScreen', html.fullScreen);
+                ts =
+                    this.getId(remotePeerId + '__snapshot') ||
+                    this.createButton(remotePeerId + '__snapshot', html.snapshot);
                 pn = this.getId(remotePeerId + '__pin') || this.createButton(remotePeerId + '__pin', html.pin);
-                ha = this.getId(remotePeerId + '__hideALL') || this.createButton(remotePeerId + '__hideALL', html.hideALL + ' focusMode');
-                sf = this.getId(controlPrefix + '___sendFile') || this.createButton(controlPrefix + '___sendFile', html.sendFile);
-                sm = this.getId(controlPrefix + '___sendMsg') || this.createButton(controlPrefix + '___sendMsg', html.sendMsg);
-                sv = this.getId(controlPrefix + '___sendVideo') || this.createButton(controlPrefix + '___sendVideo', html.sendVideo);
-                cm = this.getId(controlPrefix + '___video') || this.createButton(controlPrefix + '___video', html.videoOn);
-                au = this.getId(remotePeerId + '__audio') || this.createButton(remotePeerId + '__audio', remotePeerAudio ? html.audioOn : html.audioOff);
-                gl = this.getId(controlPrefix + '___geoLocation') || this.createButton(controlPrefix + '___geoLocation', html.geolocation);
+                ha =
+                    this.getId(remotePeerId + '__hideALL') ||
+                    this.createButton(remotePeerId + '__hideALL', html.hideALL + ' focusMode');
+                sf =
+                    this.getId(controlPrefix + '___sendFile') ||
+                    this.createButton(controlPrefix + '___sendFile', html.sendFile);
+                sm =
+                    this.getId(controlPrefix + '___sendMsg') ||
+                    this.createButton(controlPrefix + '___sendMsg', html.sendMsg);
+                sv =
+                    this.getId(controlPrefix + '___sendVideo') ||
+                    this.createButton(controlPrefix + '___sendVideo', html.sendVideo);
+                cm =
+                    this.getId(controlPrefix + '___video') ||
+                    this.createButton(controlPrefix + '___video', html.videoOn);
+                au =
+                    this.getId(remotePeerId + '__audio') ||
+                    this.createButton(remotePeerId + '__audio', remotePeerAudio ? html.audioOn : html.audioOff);
+                gl =
+                    this.getId(controlPrefix + '___geoLocation') ||
+                    this.createButton(controlPrefix + '___geoLocation', html.geolocation);
                 ban = this.getId(controlPrefix + '___ban') || this.createButton(controlPrefix + '___ban', html.ban);
-                ko = this.getId(controlPrefix + '___kickOut') || this.createButton(controlPrefix + '___kickOut', html.kickOut);
+                ko =
+                    this.getId(controlPrefix + '___kickOut') ||
+                    this.createButton(controlPrefix + '___kickOut', html.kickOut);
 
                 i = this.getId(remotePeerId + '__hand') || document.createElement('i');
                 i.id = remotePeerId + '__hand';
@@ -3172,7 +3217,8 @@ class RoomClient {
                 peerNameHeader.className = 'peer-name-header';
                 peerNameHeader.id = remotePeerId + '__peerNameHeader';
 
-                const peerNameContainer = this.getId(remotePeerId + '__peerNameContainer') || document.createElement('div');
+                const peerNameContainer =
+                    this.getId(remotePeerId + '__peerNameContainer') || document.createElement('div');
                 peerNameContainer.className = 'peer-name-container';
                 peerNameContainer.id = remotePeerId + '__peerNameContainer';
 
@@ -3224,7 +3270,10 @@ class RoomClient {
                     !vb.contains(pip) &&
                     vb.appendChild(pip);
                 BUTTONS.consumerVideo.videoMirrorButton && !vb.contains(mv) && vb.appendChild(mv);
-                BUTTONS.consumerVideo.fullScreenButton && this.isVideoFullScreenSupported && !vb.contains(fs) && vb.appendChild(fs);
+                BUTTONS.consumerVideo.fullScreenButton &&
+                    this.isVideoFullScreenSupported &&
+                    !vb.contains(fs) &&
+                    vb.appendChild(fs);
                 BUTTONS.consumerVideo.focusVideoButton && !vb.contains(ha) && vb.appendChild(ha);
 
                 if (!this.isMobileDevice && !vb.contains(pn)) vb.appendChild(pn);
@@ -3380,7 +3429,11 @@ class RoomClient {
         }
 
         if (consumer_kind === 'video') {
-            const d = elem?.closest('.Camera') || (peerId ? this.videoMediaContainer.querySelector(`.Camera[data-peer-id="${peerId}"]`) : this.getId(consumer_id + '__video'));
+            const d =
+                elem?.closest('.Camera') ||
+                (peerId
+                    ? this.videoMediaContainer.querySelector(`.Camera[data-peer-id="${peerId}"]`)
+                    : this.getId(consumer_id + '__video'));
             const vb = peerId ? this.getId(peerId + '__vb') : this.getId(consumer_id + '__vb');
 
             if (d) {
@@ -3530,12 +3583,24 @@ class RoomClient {
         pv.value = pv.value || 100;
 
         au = this.getId(au_id) || this.createButton(au_id, peer_audio ? html.audioOn : html.audioOff);
-        sf = this.getId('remotePeer___' + peer_id + '___sendFile') || this.createButton('remotePeer___' + peer_id + '___sendFile', html.sendFile);
-        sm = this.getId('remotePeer___' + peer_id + '___sendMsg') || this.createButton('remotePeer___' + peer_id + '___sendMsg', html.sendMsg);
-        sv = this.getId('remotePeer___' + peer_id + '___sendVideo') || this.createButton('remotePeer___' + peer_id + '___sendVideo', html.sendVideo);
-        gl = this.getId('remotePeer___' + peer_id + '___geoLocation') || this.createButton('remotePeer___' + peer_id + '___geoLocation', html.geolocation);
-        ban = this.getId('remotePeer___' + peer_id + '___ban') || this.createButton('remotePeer___' + peer_id + '___ban', html.ban);
-        ko = this.getId('remotePeer___' + peer_id + '___kickOut') || this.createButton('remotePeer___' + peer_id + '___kickOut', html.kickOut);
+        sf =
+            this.getId('remotePeer___' + peer_id + '___sendFile') ||
+            this.createButton('remotePeer___' + peer_id + '___sendFile', html.sendFile);
+        sm =
+            this.getId('remotePeer___' + peer_id + '___sendMsg') ||
+            this.createButton('remotePeer___' + peer_id + '___sendMsg', html.sendMsg);
+        sv =
+            this.getId('remotePeer___' + peer_id + '___sendVideo') ||
+            this.createButton('remotePeer___' + peer_id + '___sendVideo', html.sendVideo);
+        gl =
+            this.getId('remotePeer___' + peer_id + '___geoLocation') ||
+            this.createButton('remotePeer___' + peer_id + '___geoLocation', html.geolocation);
+        ban =
+            this.getId('remotePeer___' + peer_id + '___ban') ||
+            this.createButton('remotePeer___' + peer_id + '___ban', html.ban);
+        ko =
+            this.getId('remotePeer___' + peer_id + '___kickOut') ||
+            this.createButton('remotePeer___' + peer_id + '___kickOut', html.kickOut);
 
         i = this.ensurePeerAvatar(peer_info, d);
         if (i) i.style.display = 'block';

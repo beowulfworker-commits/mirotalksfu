@@ -132,11 +132,7 @@ function safeLoadLocalStorage(getter, defaults, label) {
     return cloneObject(defaults);
 }
 
-const localStorageSettings = safeLoadLocalStorage(
-    () => lS.getLocalStorageSettings(),
-    lS.SFU_SETTINGS,
-    'settings'
-);
+const localStorageSettings = safeLoadLocalStorage(() => lS.getLocalStorageSettings(), lS.SFU_SETTINGS, 'settings');
 
 const localStorageDevices = safeLoadLocalStorage(
     () => lS.getLocalStorageDevices(),
@@ -150,18 +146,8 @@ const localStorageInitConfig = safeLoadLocalStorage(
     'init config'
 );
 
-// Avoid automatic camera/microphone requests unless explicitly enabled.
-let autoStartDevices = localStorageSettings?.auto_start_devices ?? false;
-const autoStartDevicesQuery = getQueryParam('autoStartDevices');
-if (autoStartDevicesQuery) {
-    autoStartDevices = autoStartDevicesQuery.toLowerCase() === 'true';
-}
-
-if (autoStartDevices) {
-    isAudioAllowed = true;
-    isVideoAllowed = true;
-    joinRoomWithoutAudioVideo = false;
-}
+// Avoid automatic camera/microphone requests on join.
+const autoStartDevices = false;
 
 console.log('LOCAL_STORAGE', {
     localStorageSettings: localStorageSettings,
@@ -1716,6 +1702,8 @@ function joinRoom(peer_name, room_id) {
         roomId.innerText = room_id;
         userName.innerText = peer_name;
         isUserPresenter.innerText = isPresenter;
+        isAudioAllowed = false;
+        isVideoAllowed = false;
         rc = new RoomClient(
             localAudio,
             remoteAudios,
@@ -1887,6 +1875,7 @@ function roomIsReady() {
     loadSettingsFromLocalStorage();
     startSessionTimer();
     handleButtonsBar();
+    enforceCompactToolbar();
     handleDropdownHover();
     checkButtonsBar();
     if (room_password) {
@@ -4211,10 +4200,7 @@ function getUUID() {
 }
 
 function handleButtonsBar() {
-    const showButtonsHandler = () => showButtons();
-    isDesktopDevice
-        ? document.body.addEventListener('mousemove', showButtonsHandler)
-        : document.body.addEventListener('touchstart', showButtonsHandler);
+    showButtons();
 }
 
 function handleDropdownHover(dropdownElement = null) {
@@ -4260,16 +4246,9 @@ function handleDropdownHover(dropdownElement = null) {
 function showButtons() {
     if (!ensureControlElements()) return;
 
-    if (
-        isButtonsBarOver ||
-        isButtonsVisible ||
-        rc.isVideoBarDropDownOpen ||
-        (isMobileDevice && rc.isChatOpen) ||
-        (isMobileDevice && rc.isMySettingsOpen)
-    )
-        return;
-    toggleExtraButton.innerHTML = icons.down;
     bottomButtons.style.display = 'flex';
+    if (control) control.style.display = 'none';
+    hide(toggleExtraButton);
     isButtonsVisible = true;
 }
 
@@ -4277,18 +4256,49 @@ function checkButtonsBar() {
     if (!ensureControlElements()) return;
 
     bottomButtons.style.display = 'flex';
+    hide(toggleExtraButton);
+    if (control) control.style.display = 'none';
     isButtonsVisible = true;
+}
 
-    if (localStorageSettings.keep_buttons_visible) {
-        control.style.display = 'flex';
-        toggleExtraButton.innerHTML = icons.up;
-    } else if (!isButtonsBarOver) {
-        control.style.display = 'none';
-        toggleExtraButton.innerHTML = icons.up;
-    }
-    setTimeout(() => {
-        checkButtonsBar();
-    }, 10000);
+function enforceCompactToolbar() {
+    const allowedButtons = new Set([
+        'startAudioButton',
+        'stopAudioButton',
+        'startVideoButton',
+        'stopVideoButton',
+        'chatButton',
+        'settingsButton',
+    ]);
+
+    const labelMap = {
+        startAudioButton: 'Audio',
+        stopAudioButton: 'Audio',
+        startVideoButton: 'Camera',
+        stopVideoButton: 'Camera',
+        chatButton: 'Chat',
+        settingsButton: 'Settings',
+    };
+
+    const bottomButtonsContainer = document.getElementById('bottomButtons');
+    if (!bottomButtonsContainer) return;
+
+    bottomButtonsContainer.querySelectorAll('button').forEach((btn) => {
+        if (!allowedButtons.has(btn.id)) {
+            btn.classList.add('hidden');
+            btn.setAttribute('aria-hidden', 'true');
+            return;
+        }
+
+        const cleanLabel =
+            btn.getAttribute('aria-label') || btn.title || labelMap[btn.id] || btn.id.replace('Button', '');
+        btn.setAttribute('aria-label', cleanLabel.trim() || 'control button');
+    });
+
+    if (control) control.style.display = 'none';
+    hide(toggleExtraButton);
+    bottomButtons.style.display = 'flex';
+    isButtonsVisible = true;
 }
 
 function toggleExtraButtons() {

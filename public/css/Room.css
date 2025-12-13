@@ -190,7 +190,10 @@ body {
     color: #fff;
     border: 1px solid #333;
     cursor: pointer;
-    transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+    transition:
+        background 0.2s ease,
+        border-color 0.2s ease,
+        color 0.2s ease;
 }
 
 .init-device-toggle i {
@@ -222,7 +225,6 @@ body {
 #initUsernameEmojiButton {
     display: none !important;
 }
-
 
 .init-name-input {
     order: 2;
