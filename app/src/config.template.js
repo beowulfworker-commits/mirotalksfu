@@ -991,9 +991,7 @@ module.exports = {
             app: {
                 language: process.env.UI_LANGUAGE || 'ru',
                 name: process.env.APP_NAME || 'Kremlevka',
-                title:
-                    process.env.APP_TITLE ||
-                    '<h1>Кремлёвка</h1> Специальная связь.',
+                title: process.env.APP_TITLE || '<h1>Кремлёвка</h1> Специальная связь.',
                 description:
                     process.env.APP_DESCRIPTION ||
                     'Start your next video call with a single click. No download, plug-in, or login is required.',
@@ -1027,9 +1025,7 @@ module.exports = {
              * Search engine optimization elements.
              */
             meta: {
-                description:
-                    process.env.META_DESCRIPTION ||
-                    'Kremlevka for real-time video communications.',
+                description: process.env.META_DESCRIPTION || 'Kremlevka for real-time video communications.',
                 keywords: process.env.META_KEYWORDS || 'webrtc, video calls, conference, screen sharing, mirotalk, sfu',
             },
 
