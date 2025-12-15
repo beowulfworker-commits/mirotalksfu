@@ -394,8 +394,8 @@ class RoomClient {
         this.forceVP9 = false; // Force VP9 codec for webcam and screen sharing
         this.forceH264 = false; // Force H264 codec for webcam and screen sharing
         this.forceAV1 = false; // Force AV1 codec for webcam and screen sharing
-        this.enableWebcamLayers = true; // Enable simulcast or SVC for webcam
-        this.enableSharingLayers = true; // Enable simulcast or SVC for screen sharing
+        this.enableWebcamLayers = true; // Enable simulcast or SVC for webcam (auto disables simulcast if RID is unsupported)
+        this.enableSharingLayers = true; // Enable simulcast or SVC for screen sharing (auto disables simulcast if RID is unsupported)
         this.numSimulcastStreamsWebcam = 3; // Number of streams for simulcast in webcam
         this.numSimulcastStreamsSharing = 1; // Number of streams for simulcast in screen sharing
         this.webcamScalabilityMode = 'L3T3'; // Scalability Mode for webcam | 'L1T3' for VP8/H264 (in each simulcast encoding), 'L3T3_KEY' for VP9
@@ -1839,6 +1839,8 @@ class RoomClient {
                 },
             };
 
+            const supportsRidSimulcast = this.supportsRidSimulcast();
+
             if (audio) {
                 console.log('AUDIO ENABLE OPUS');
                 params.codecOptions = {
@@ -1851,11 +1853,18 @@ class RoomClient {
 
             if (video) {
                 const { encodings, codec } = this.getWebCamEncoding();
+                const wantsSimulcast = Array.isArray(encodings) && encodings.length > 1;
+                const adjustedEncodings = !supportsRidSimulcast && wantsSimulcast ? undefined : encodings;
+
+                if (wantsSimulcast && !supportsRidSimulcast) {
+                    console.warn('RID header extension not supported, disabling webcam simulcast');
+                }
+
                 console.log('GET WEBCAM ENCODING', {
-                    encodings: encodings,
+                    encodings: adjustedEncodings,
                     codecs: codec,
                 });
-                params.encodings = encodings;
+                params.encodings = adjustedEncodings;
                 params.codecs = codec;
                 params.codecOptions = {
                     videoGoogleStartBitrate: 1000,
@@ -1864,11 +1873,18 @@ class RoomClient {
 
             if (screen) {
                 const { encodings, codec } = this.getScreenEncoding();
+                const wantsSimulcast = Array.isArray(encodings) && encodings.length > 1;
+                const adjustedEncodings = !supportsRidSimulcast && wantsSimulcast ? undefined : encodings;
+
+                if (wantsSimulcast && !supportsRidSimulcast) {
+                    console.warn('RID header extension not supported, disabling screen simulcast');
+                }
+
                 console.log('GET SCREEN ENCODING', {
-                    encodings: encodings,
+                    encodings: adjustedEncodings,
                     codecs: codec,
                 });
-                params.encodings = encodings;
+                params.encodings = adjustedEncodings;
                 params.codecs = codec;
                 params.codecOptions = {
                     videoGoogleStartBitrate: 1000,
@@ -1880,7 +1896,20 @@ class RoomClient {
                 params: params,
             });
 
-            const producer = await this.producerTransport.produce(params);
+            const triedSimulcast = Array.isArray(params.encodings) && params.encodings.length > 1;
+            let producer;
+
+            try {
+                producer = await this.producerTransport.produce(params);
+            } catch (err) {
+                if (triedSimulcast) {
+                    console.warn('produce failed, retrying without simulcast', err);
+                    const fallbackParams = { ...params, encodings: undefined };
+                    producer = await this.producerTransport.produce(fallbackParams);
+                } else {
+                    throw err;
+                }
+            }
 
             if (!producer) {
                 throw new Error('Producer not found!');
@@ -2355,6 +2384,14 @@ class RoomClient {
     // ####################################################
     // WEBCAM ENCODING
     // ####################################################
+
+    supportsRidSimulcast() {
+        const exts = this.device?.rtpCapabilities?.headerExtensions || [];
+        const hasRid = exts.some((e) => e.uri === 'urn:ietf:params:rtp-hdrext:sdes:rtp-stream-id');
+        const hasRepairRid = exts.some((e) => e.uri === 'urn:ietf:params:rtp-hdrext:sdes:repaired-rtp-stream-id');
+
+        return hasRid || hasRepairRid;
+    }
 
     getWebCamEncoding() {
         let encodings;

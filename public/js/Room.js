@@ -2883,9 +2883,12 @@ function handleMediaError(mediaType, err, redirectURL = false) {
 
     popupHtmlMessage(null, image.forbidden, 'Access denied', html, 'center', redirectURL);
 
-    throw new Error(
-        `Access denied for ${mediaType} device [${err.name}]: ${errMessage} check the common getUserMedia errors: https://blog.addpipe.com/common-getusermedia-errors/`
-    );
+    const detailedError = `Access denied for ${mediaType} device [${err.name}]: ${errMessage} check the common getUserMedia errors: https://blog.addpipe.com/common-getusermedia-errors/`;
+
+    console.warn(detailedError);
+    userLog('error', errMessage, 'top-end', 6000);
+
+    return detailedError;
 }
 
 function popupHtmlMessage(icon, imageUrl, title, html, position, redirectURL = false, reloadPage = false) {
