@@ -9,7 +9,7 @@ config.ui.brand = {
   htmlInjection: true,
   app: {
     language: 'ru',
-    name: 'Kremlevka',
+    name: 'Кремлёвка',
     title: '<h1>Кремлёвка</h1> - надежная видеосвязь.',
     description: 'Защищенная линия связи.',
     joinDescription: 'Введите код конференции.',
