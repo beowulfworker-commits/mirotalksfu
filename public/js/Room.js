@@ -1575,22 +1575,22 @@ async function shareRoom(useNavigator = false) {
         Swal.fire({
             background: swalBackground,
             position: 'center',
-            title: 'Share the room',
+            title: 'Поделиться комнатой',
             html: `
             <div id="qrRoomContainer">
                 <canvas id="qrRoom"></canvas>
             </div>
             <br/>
-            <p style="background:transparent; color:rgb(8, 189, 89);">Join from your mobile device</p>
-            <p style="background:transparent; color:white; font-family: Arial, Helvetica, sans-serif;">No need for apps, simply capture the QR code with your mobile camera Or Invite someone else to join by sending them the following URL</p>
+            <p style="background:transparent; color:rgb(8, 189, 89);">Присеодениться с мобильного</p>
+            <p style="background:transparent; color:white; font-family: Arial, Helvetica, sans-serif;">Наведите камеру на qr код для подключения к конференции.</p>
             <p style="background:transparent; color:rgb(8, 189, 89);">${RoomURL}</p>`,
             showDenyButton: true,
             showCancelButton: true,
             cancelButtonColor: 'red',
             denyButtonColor: 'green',
-            confirmButtonText: `Copy URL`,
+            confirmButtonText: `Копировать URL`,
             denyButtonText: `Email invite`,
-            cancelButtonText: `Close`,
+            cancelButtonText: `Закрыть`,
             showClass: { popup: 'animate__animated animate__fadeInDown' },
             hideClass: { popup: 'animate__animated animate__fadeOutUp' },
         }).then((result) => {
