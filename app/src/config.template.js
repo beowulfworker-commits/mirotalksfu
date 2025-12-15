@@ -1036,7 +1036,7 @@ module.exports = {
              */
             og: {
                 type: process.env.OG_TYPE || 'app-webrtc',
-                siteName: process.env.OG_SITE_NAME || 'Kremlevka',
+                siteName: process.env.OG_SITE_NAME || 'Кремлёвка',
                 title: process.env.OG_TITLE || 'Click the link to make a call.',
                 description:
                     process.env.OG_DESCRIPTION || 'Kremlevka provides real-time video calls and screen sharing.',
