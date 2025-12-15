@@ -768,7 +768,7 @@ class RoomClient {
     async loadDevice(routerRtpCapabilities) {
         if (!routerRtpCapabilities) {
             console.error('Router RTP Capabilities are required to load the device.');
-            this.userLog('error', 'Router RTP Capabilities are missing.', 'center', 6000);
+            this.userLog('error', 'Отсутствуют возможности Router RTP.', 'center', 6000);
             return null;
         }
 
@@ -779,10 +779,10 @@ class RoomClient {
         } catch (error) {
             if (error.name === 'UnsupportedError') {
                 console.error('Browser not supported:', error);
-                this.userLog('error', 'Browser not supported. Please try a different browser.', 'center', 6000);
+                this.userLog('error', 'Браузер не поддерживается. Попробуйте другой.', 'center', 6000);
             } else {
                 console.error('Error creating device:', error);
-                this.userLog('error', `Failed to create device: ${error.message}`, 'center', 6000);
+                this.userLog('error', `Не удалось создать устройство: ${error.message}`, 'center', 6000);
             }
             return null;
         }
@@ -798,7 +798,7 @@ class RoomClient {
             );
         } catch (error) {
             console.error('Error loading device with router RTP capabilities:', error);
-            this.userLog('error', `Failed to load device: ${error.message}`, 'center', 6000);
+            this.userLog('error', `Не удалось загрузить устройство: ${error.message}`, 'center', 6000);
             return null;
         }
 
@@ -5728,8 +5728,8 @@ class RoomClient {
             title: 'Delete this Message?',
             imageUrl: image.delete,
             showDenyButton: true,
-            confirmButtonText: `Yes`,
-            denyButtonText: `No`,
+            confirmButtonText: `Да`,
+            denyButtonText: `Нет`,
             showClass: { popup: 'animate__animated animate__fadeInDown' },
             hideClass: { popup: 'animate__animated animate__fadeOutUp' },
         }).then((result) => {
@@ -5927,8 +5927,8 @@ class RoomClient {
             title: 'Clean up all chat Messages?',
             imageUrl: image.delete,
             showDenyButton: true,
-            confirmButtonText: `Yes`,
-            denyButtonText: `No`,
+            confirmButtonText: `Да`,
+            denyButtonText: `Нет`,
             showClass: { popup: 'animate__animated animate__fadeInDown' },
             hideClass: { popup: 'animate__animated animate__fadeOutUp' },
         }).then((result) => {
@@ -6494,8 +6494,8 @@ class RoomClient {
             title: 'Clear the editor content?',
             imageUrl: image.delete,
             showDenyButton: true,
-            confirmButtonText: `Yes`,
-            denyButtonText: `No`,
+            confirmButtonText: `Да`,
+            denyButtonText: `Нет`,
             showClass: { popup: 'animate__animated animate__fadeInDown' },
             hideClass: { popup: 'animate__animated animate__fadeOutUp' },
         }).then((result) => {
@@ -9177,8 +9177,8 @@ class RoomClient {
                         this.peerMediaStartConfirm(
                             mediaType.audio,
                             image.unmute,
-                            'Enable Microphone',
-                            'Allow the presenter to enable your microphone?'
+                            'Включить микрофон',
+                            'Разрешить ведущему включить ваш микрофон?'
                         );
                     }
                     break;
@@ -9198,8 +9198,8 @@ class RoomClient {
                         this.peerMediaStartConfirm(
                             mediaType.video,
                             image.unhide,
-                            'Enable Camera',
-                            'Allow the presenter to enable your camera?'
+                            'Включить камеру',
+                            'Разрешить ведущему включить вашу камеру?'
                         );
                     }
                     break;
@@ -9221,8 +9221,8 @@ class RoomClient {
                         this.peerMediaStartConfirm(
                             mediaType.screen,
                             image.start,
-                            'Start Screen share',
-                            'Allow the presenter to start your screen share?'
+                            'Начать трансляцию экрана',
+                            'Разрешить ведущему начать демонстрацию вашего экрана?'
                         );
                     }
                     break;
@@ -9242,8 +9242,8 @@ class RoomClient {
             title: title,
             text: text,
             showDenyButton: true,
-            confirmButtonText: `Yes`,
-            denyButtonText: `No`,
+            confirmButtonText: `Да`,
+            denyButtonText: `Нет`,
             showClass: { popup: 'animate__animated animate__fadeInDown' },
             hideClass: { popup: 'animate__animated animate__fadeOutUp' },
         }).then(async (result) => {
