@@ -524,38 +524,38 @@ function refreshMainButtonsToolTipPlacement() {
         const bPlacement = position == 'vertical' ? 'top' : 'right';
 
         // Control buttons
-        setTippy('shareButton', 'Share room', placement);
-        setTippy('hideMeButton', 'Toggle hide self view', placement);
-        setTippy('startRecButton', 'Start recording', placement);
-        setTippy('stopRecButton', 'Stop recording', placement);
-        setTippy('fullScreenButton', 'Toggle full screen', placement);
-        setTippy('emojiRoomButton', 'Toggle emoji reaction', placement);
-        setTippy('pollButton', 'Toggle the poll', placement);
-        setTippy('editorButton', 'Toggle the editor', placement);
-        setTippy('transcriptionButton', 'Toggle transcription', placement);
-        setTippy('whiteboardButton', 'Toggle the whiteboard', placement);
-        setTippy('documentPiPButton', 'Toggle Document picture in picture', placement);
-        setTippy('snapshotRoomButton', 'Snapshot screen, window, or tab', placement);
-        setTippy('restartICEButton', 'Restart ICE', placement);
-        setTippy('aboutButton', 'About this project', placement);
+        setTippy('shareButton', 'Поделиться комнатой', placement);
+        setTippy('hideMeButton', 'Скрыть/показать собственное видео', placement);
+        setTippy('startRecButton', 'Начать запись', placement);
+        setTippy('stopRecButton', 'Остановить запись', placement);
+        setTippy('fullScreenButton', 'Включить/выключить полноэкранный режим', placement);
+        setTippy('emojiRoomButton', 'Показать/скрыть реакции', placement);
+        setTippy('pollButton', 'Открыть/закрыть опрос', placement);
+        setTippy('editorButton', 'Открыть/закрыть редактор', placement);
+        setTippy('transcriptionButton', 'Включить/выключить транскрипцию', placement);
+        setTippy('whiteboardButton', 'Показать/скрыть доску', placement);
+        setTippy('documentPiPButton', 'Документ в режиме "картинка в картинке"', placement);
+        setTippy('snapshotRoomButton', 'Снимок экрана, окна или вкладки', placement);
+        setTippy('restartICEButton', 'Перезапустить ICE', placement);
+        setTippy('aboutButton', 'О проекте', placement);
 
         // Bottom buttons
-        setTippy('toggleExtraButton', 'Toggle extra buttons', bPlacement);
-        setTippy('startAudioButton', 'Start the audio', bPlacement);
-        setTippy('stopAudioButton', 'Stop the audio', bPlacement);
-        setTippy('startVideoButton', 'Start the video', bPlacement);
-        setTippy('stopVideoButton', 'Stop the video', bPlacement);
-        setTippy('swapCameraButton', 'Swap the camera', bPlacement);
-        setTippy('startScreenButton', 'Start screen share', bPlacement);
-        setTippy('stopScreenButton', 'Stop screen share', bPlacement);
-        setTippy('raiseHandButton', 'Raise your hand', bPlacement);
-        setTippy('lowerHandButton', 'Lower your hand', bPlacement);
-        setTippy('chatButton', 'Toggle the chat', bPlacement);
+        setTippy('toggleExtraButton', 'Показать/скрыть дополнительные кнопки', bPlacement);
+        setTippy('startAudioButton', 'Включить звук', bPlacement);
+        setTippy('stopAudioButton', 'Выключить звук', bPlacement);
+        setTippy('startVideoButton', 'Включить видео', bPlacement);
+        setTippy('stopVideoButton', 'Выключить видео', bPlacement);
+        setTippy('swapCameraButton', 'Поменять камеру', bPlacement);
+        setTippy('startScreenButton', 'Начать демонстрацию экрана', bPlacement);
+        setTippy('stopScreenButton', 'Остановить демонстрацию экрана', bPlacement);
+        setTippy('raiseHandButton', 'Поднять руку', bPlacement);
+        setTippy('lowerHandButton', 'Опустить руку', bPlacement);
+        setTippy('chatButton', 'Открыть/закрыть чат', bPlacement);
         if (document.getElementById('participantsButton')) {
-            setTippy('participantsButton', 'Toggle participants list', bPlacement);
+            setTippy('participantsButton', 'Показать/скрыть список участников', bPlacement);
         }
-        setTippy('settingsButton', 'Toggle the settings', bPlacement);
-        setTippy('exitButton', 'Leave room', bPlacement);
+        setTippy('settingsButton', 'Открыть настройки', bPlacement);
+        setTippy('exitButton', 'Выйти из комнаты', bPlacement);
     }
 }
 
@@ -1371,7 +1371,7 @@ async function whoAreYou() {
         inputAttributes: { maxlength: 254, id: 'usernameInput' },
         inputValue: default_name,
         html: initUser, // Inject HTML
-        confirmButtonText: `Join meeting`,
+        confirmButtonText: `Войти`,
         customClass: { popup: 'init-modal-size' },
         showClass: { popup: 'animate__animated animate__fadeInDown' },
         hideClass: { popup: 'animate__animated animate__fadeOutUp' },

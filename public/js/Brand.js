@@ -36,7 +36,7 @@ const guestJoinRoomButton = document.getElementById('guestJoinRoomButton');
 let BRAND = {
     app: {
         language: 'ru',
-        name: 'Kremlevka',
+        name: 'Кремлёвка',
         title: 'Кремлёвка<br />Защищённая линия.<br />Безопасно, просто, быстро.',
         description:
             'Начните видеозвонок в один клик. Не нужны загрузки, плагины или регистрация — сразу общайтесь, переписывайтесь и делитесь экраном.',

@@ -990,7 +990,7 @@ module.exports = {
 
             app: {
                 language: process.env.UI_LANGUAGE || 'ru',
-                name: process.env.APP_NAME || 'Kremlevka',
+                name: process.env.APP_NAME || 'Кремлёвка',
                 title: process.env.APP_TITLE || '<h1>Кремлёвка</h1> Специальная связь.',
                 description:
                     process.env.APP_DESCRIPTION ||
