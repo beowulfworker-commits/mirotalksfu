@@ -1747,6 +1747,39 @@ function startServer() {
                 return cb('isBanned');
             }
 
+            if (!(socket.room_id in presenters)) presenters[socket.room_id] = {};
+
+            const existingSocketId = room.getPeerSocketIdByUuid(peer_uuid);
+            if (existingSocketId && existingSocketId !== socket.id) {
+                log.info('[Join] - Takeover existing peer by uuid', {
+                    room_id: room.id,
+                    peer_name: peer_name,
+                    peer_uuid: peer_uuid,
+                    oldSocketId: existingSocketId,
+                    newSocketId: socket.id,
+                });
+
+                room.removePeer(existingSocketId);
+
+                const oldSocket = io.sockets.sockets.get(existingSocketId);
+                if (oldSocket) {
+                    try {
+                        oldSocket.disconnect(true);
+                    } catch (error) {
+                        log.warn('[Join] - Error disconnecting previous peer socket', {
+                            error: error.message,
+                            oldSocketId: existingSocketId,
+                        });
+                    }
+                }
+
+                const roomPresenters = presenters[socket.room_id];
+                if (roomPresenters && roomPresenters[existingSocketId]) {
+                    roomPresenters[socket.id] = roomPresenters[existingSocketId];
+                    delete roomPresenters[existingSocketId];
+                }
+            }
+
             // Remove old peer with same socket.id before adding new one
             const existingPeer = room.getPeer(socket.id);
             if (existingPeer) {
@@ -1762,8 +1795,6 @@ function startServer() {
             const activeStreams = getRTMPActiveStreams();
 
             log.info('[Join] - current active RTMP streams', activeStreams);
-
-            if (!(socket.room_id in presenters)) presenters[socket.room_id] = {};
 
             // Set the presenters
             const presenter = {
