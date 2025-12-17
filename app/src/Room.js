@@ -549,6 +549,22 @@ module.exports = class Room {
         return peer;
     }
 
+    getPeerSocketIdByUuid(peer_uuid) {
+        for (const [socketId, peer] of this.peers.entries()) {
+            if (peer?.peer_uuid === peer_uuid) {
+                return socketId;
+            }
+        }
+        return null;
+    }
+
+    removePeerByUuid(peer_uuid) {
+        const socketId = this.getPeerSocketIdByUuid(peer_uuid);
+        if (socketId) {
+            this.removePeer(socketId);
+        }
+    }
+
     getPeers() {
         return this.peers;
     }
