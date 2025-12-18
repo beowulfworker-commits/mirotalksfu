@@ -1367,7 +1367,7 @@ async function whoAreYou() {
         background: swalBackground,
         title: BRAND.app?.name,
         input: 'text',
-        inputPlaceholder: 'Enter your email or name',
+        inputPlaceholder: 'Введите имя',
         inputAttributes: { maxlength: 254, id: 'usernameInput' },
         inputValue: default_name,
         html: initUser, // Inject HTML
