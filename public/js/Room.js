@@ -1270,6 +1270,7 @@ async function whoAreYou() {
                 clientButtons: BUTTONS,
             });
         }
+        BUTTONS.main.startScreenButton = true;
     } catch (error) {
         console.error('04 ----> AXIOS GET CONFIG ERROR', error.message);
     }
