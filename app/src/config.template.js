@@ -1178,7 +1178,7 @@ module.exports = {
                 fullScreenButton: process.env.SHOW_FULLSCREEN_BUTTON !== 'false',
                 startAudioButton: process.env.SHOW_AUDIO_BUTTON !== 'false',
                 startVideoButton: process.env.SHOW_VIDEO_BUTTON !== 'false',
-                startScreenButton: process.env.SHOW_SCREEN_BUTTON !== 'true',
+                startScreenButton: process.env.SHOW_SCREEN_BUTTON !== 'false',
                 swapCameraButton: process.env.SHOW_SWAP_CAMERA !== 'false',
                 chatButton: process.env.SHOW_CHAT_BUTTON !== 'false',
                 pollButton: process.env.SHOW_POLL_BUTTON !== 'false',
