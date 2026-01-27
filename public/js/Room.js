@@ -3,14 +3,14 @@
 if (location.href.substr(0, 5) !== 'https') location.href = 'https' + location.href.substr(4, location.href.length - 4);
 
 /**
- * MiroTalk SFU - Room component
+ * 
  *
- * @link    GitHub: https://github.com/miroslavpejic85/mirotalksfu
- * @link    Official Live demo: https://sfu.mirotalk.com
- * @license For open source use: AGPLv3
- * @license For commercial or closed source, contact us at license.mirotalk@gmail.com or purchase directly via CodeCanyon
- * @license CodeCanyon: https://codecanyon.net/item/mirotalk-sfu-webrtc-realtime-video-conferences/40769970
- * @author  Miroslav Pejic - miroslav.pejic.85@gmail.com
+ * 
+ * 
+ * 
+ * 
+ * 
+ * 
  * @version 2.0.53
  *
  */
@@ -1270,7 +1270,6 @@ async function whoAreYou() {
                 clientButtons: BUTTONS,
             });
         }
-        BUTTONS.main.startScreenButton = true;
     } catch (error) {
         console.error('04 ----> AXIOS GET CONFIG ERROR', error.message);
     }
