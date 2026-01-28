@@ -1,15 +1,8 @@
 'use strict';
 
 /**
- * MiroTalk SFU - Client component
  *
- * @link    GitHub: https://github.com/miroslavpejic85/mirotalksfu
- * @link    Official Live demo: https://sfu.mirotalk.com
- * @license For open source use: AGPLv3
- * @license For commercial or closed source, contact us at license.mirotalk@gmail.com or purchase directly via CodeCanyon
- * @license CodeCanyon: https://codecanyon.net/item/mirotalk-sfu-webrtc-realtime-video-conferences/40769970
- * @author  Miroslav Pejic - miroslav.pejic.85@gmail.com
- * @version 1.9.45
+ *
  *
  */
 
@@ -2999,11 +2992,8 @@ class RoomClient {
             return console.warn('[removeVideoProducer] element not found', producer_id);
         }
 
-        const peerId = video.dataset.peerId || this.peer_id;
-        const d =
-            video.closest('.Camera') ||
-            this.videoMediaContainer.querySelector(`.Camera[data-peer-id="${peerId}"]`);
-        const vb = this.getId(peerId + '__vb');
+        const d = this.getId(video.id + '__video');
+        const vb = this.getId(video.id + '__vb');
 
         if (video.srcObject) {
             video.srcObject.getTracks().forEach(function (track) {
@@ -3015,26 +3005,20 @@ class RoomClient {
             video.parentNode.removeChild(video);
         } else {
             console.warn('[removeVideoProducer] video parent not found', producer_id);
+            return;
         }
 
-        if (d && d.parentNode) {
-            const remainingVideos = d.querySelectorAll('video');
-            if (remainingVideos.length === 0) {
-                d.parentNode.removeChild(d);
-            }
-        } else {
+        if (!d || !d.parentNode) {
             console.warn('[removeVideoProducer] video wrapper not found', producer_id);
+            return;
         }
+        d.parentNode.removeChild(d);
 
-        const hasLocalVideoProducer = this.producerLabel.has(mediaType.video);
-        const hasLocalScreenProducer = this.producerLabel.has(mediaType.screen);
-        if (!hasLocalVideoProducer && !hasLocalScreenProducer) {
-            if (vb && vb.parentNode) {
-                vb.parentNode.removeChild(vb);
-            } else {
-                console.warn('[removeVideoProducer] vb wrapper not found', producer_id);
-            }
+        if (!vb || !vb.parentNode) {
+            console.warn('[removeVideoProducer] vb wrapper not found', producer_id);
+            return;
         }
+        vb.parentNode.removeChild(vb);
 
         handleAspectRatio();
 
