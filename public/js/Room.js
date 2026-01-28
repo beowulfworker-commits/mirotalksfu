@@ -3975,8 +3975,8 @@ function handleRoomClientEvents() {
     });
     rc.on(RoomClient.EVENTS.resumeScreen, () => {
         console.log('Room event: Client resume screen');
-        hide(stopScreenButton);
-        show(startScreenButton);
+        hide(startScreenButton);
+        show(stopScreenButton);
         hideClassElements('videoMenuBar');
         screen = true;
     });
