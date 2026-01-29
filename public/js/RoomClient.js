@@ -2988,37 +2988,54 @@ class RoomClient {
     // ####################################################
 
     removeVideoProducer(video, event, producer_id) {
-        if (!video) {
-            return console.warn('[removeVideoProducer] element not found', producer_id);
+        const resolvedVideo = video || (producer_id ? this.getId(producer_id) : null);
+        const peerId = resolvedVideo?.dataset?.peerId || resolvedVideo?.getAttribute('name') || null;
+        let d = resolvedVideo?.closest('.Camera') || null;
+
+        if (!d && peerId) {
+            d =
+                this.videoMediaContainer.querySelector(`.Camera[data-peer-id="${peerId}"][data-kind="screen"]`) ||
+                this.videoMediaContainer.querySelector(`.Camera[data-peer-id="${peerId}"][data-kind="camera"]`) ||
+                null;
         }
 
-        const d = this.getId(video.id + '__video');
-        const vb = this.getId(video.id + '__vb');
-
-        if (video.srcObject) {
-            video.srcObject.getTracks().forEach(function (track) {
-                track.stop();
-            });
+        if (!d && producer_id) {
+            d = this.getId(producer_id + '__video');
         }
 
-        if (video.parentNode) {
-            video.parentNode.removeChild(video);
+        if (!d && peerId) {
+            d = this.getId(peerId + '__screen') || this.getId(peerId + '__video');
+        }
+
+        const vb = (peerId && this.getId(peerId + '__vb')) || (producer_id && this.getId(producer_id + '__vb'));
+
+        if (!resolvedVideo) {
+            console.warn('[removeVideoProducer] element not found', producer_id);
         } else {
-            console.warn('[removeVideoProducer] video parent not found', producer_id);
-            return;
+            if (resolvedVideo.srcObject) {
+                resolvedVideo.srcObject.getTracks().forEach(function (track) {
+                    track.stop();
+                });
+            }
+
+            if (resolvedVideo.parentNode) {
+                resolvedVideo.parentNode.removeChild(resolvedVideo);
+            } else {
+                console.warn('[removeVideoProducer] video parent not found', producer_id);
+            }
         }
 
         if (!d || !d.parentNode) {
             console.warn('[removeVideoProducer] video wrapper not found', producer_id);
-            return;
+        } else {
+            d.parentNode.removeChild(d);
         }
-        d.parentNode.removeChild(d);
 
         if (!vb || !vb.parentNode) {
             console.warn('[removeVideoProducer] vb wrapper not found', producer_id);
-            return;
+        } else {
+            vb.parentNode.removeChild(vb);
         }
-        vb.parentNode.removeChild(vb);
 
         handleAspectRatio();
 
