@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="ru" class="no-js">
+    <head>
+        <!-- Title and Icon -->
+
+        <title id="title">Кремлёвка.</title>
+        <link id="icon" rel="shortcut icon" href="../images/logo.svg" />
+        <link id="appleTouchIcon" rel="apple-touch-icon" href="../images/logo.svg" />
+
+        <meta name="theme-color" content="#ffffff" />
+
+        <!-- Meta Information -->
+
+        <meta charset="utf-8" />
+        <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+        <meta
+            id="description"
+            name="description"
+            content="Kremlevka powered by WebRTC and mediasoup, Real-time Simple Secure Fast video calls, messaging and screen sharing capabilities in the browser."
+        />
+        <meta
+            id="keywords"
+            name="keywords"
+            content="webrtc, miro, mediasoup, mediasoup-client, self hosted, voip, sip, real-time communications, chat, messaging, meet, webrtc stun, webrtc turn, webrtc p2p, webrtc sfu, video meeting, video chat, video conference, multi video chat, multi video conference, peer to peer, p2p, sfu, rtc, alternative to, zoom, microsoft teams, google meet, jitsi, meeting"
+        />
+
+        <!-- https://ogp.me -->
+
+        <meta property="og:type" content="{{OG_TYPE}}" />
+        <meta property="og:site_name" content="{{OG_SITE_NAME}}" />
+        <meta property="og:title" content="{{OG_TITLE}}" />
+        <meta property="og:description" content="{{OG_DESCRIPTION}}" />
+        <meta property="og:image" content="{{OG_IMAGE}}" />
+        <meta property="og:url" content="{{OG_URL}}" />
+
+        <!-- StyleSheet -->
+
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=IBM+Plex+Sans:400,600" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.1.1/css/all.min.css" />
+        <link rel="stylesheet" type="text/css" href="../css/landing.css" />
+
+        <script src="https://cdn.jsdelivr.net/npm/xss/dist/xss.min.js"></script>
+    </head>
+    <body class="is-boxed">
+        <div class="body-wrap">
+            <main>
+                <section class="hero">
+                    <!--    <div class="container">
+                        <div class="hero-inner">
+                            <div class="hero-copy reveal-from-bottom">
+                                <h1 id="newRoomTitle" class="hero-title mt-0">
+                                    Укажите имя<br />
+                                    Общайтесь<br />
+                                </h1>
+                                <p id="newRoomDescription" class="hero-paragraph">
+                                    Каждая комната имеет одноразовый URL. Просто выберите название комнаты и поделитесь своей ссылкой. Это так просто.
+                                </p>
+                            </div>
+                            <div class="hero-figure anime-element">
+                                <svg class="placeholder" width="528" height="396" viewBox="0 0 528 396">
+                                    <rect width="528" height="396" style="fill: transparent" />
+                                </svg>
+                                <div class="hero-figure-box hero-figure-box-01" data-rotation="45deg"></div>
+                                <div class="hero-figure-box hero-figure-box-02" data-rotation="-45deg"></div>
+                                <div class="hero-figure-box hero-figure-box-03" data-rotation="0deg"></div>
+                                <div class="hero-figure-box hero-figure-box-04" data-rotation="-135deg"></div>
+                                <div class="hero-figure-box hero-figure-box-05"></div>
+                                <div class="hero-figure-box hero-figure-box-06"></div>
+                                <div class="hero-figure-box hero-figure-box-07"></div>
+                                <div class="hero-figure-box hero-figure-box-08" data-rotation="-22deg"></div>
+                                <div class="hero-figure-box hero-figure-box-09" data-rotation="-52deg"></div>
+                                <div class="hero-figure-box hero-figure-box-10" data-rotation="-50deg"></div>
+                            </div>
+                        </div>
+                    </div> -->
+                </section>
+
+                <section class="cta section">
+                    <div class="container">
+                        <div class="cta-inner section-inner br-12">
+                            <h3 id="joinDescription" class="section-title mt-0">Введите код комнаты.</h3>
+                            <div>
+                                <div class="mb-24">
+                                    <label for="roomName"></label>
+                                    <div class="form-group-desktop">
+                                        <input id="roomName" class="form-input" type="text" maxlength="32" value="" />
+                                        <!-- <button
+                                            id="genRoomButton"
+                                            class="button button-primary br-6 mr-8 mb-8 fas fa-arrows-rotate"
+                                        ></button> -->
+                                        <button id="joinRoomButton" class="button button-primary pulse">Войти</button>
+                                    </div>
+                                </div>
+                                <div class="outline-vpn-link">
+                                    <!-- <a class="button button-primary button-wide-mobile" disabled href="/vpns">Скачать ВПН</a> -->
+                                </div>
+                                <div id="lastRoomContainer" class="last-room">
+                                    <!--  <span id="joinLastLabel">Ваша недавняя комната:</span>
+                                    <a id="lastRoom"></a> -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </main>
+        </div>
+
+        <script defer src="../js/Utils.js"></script>
+        <script defer src="../js/Common.js"></script>
+    </body>
+</html>

@@ -1,0 +1,6587 @@
+'use strict';
+
+if (location.href.substr(0, 5) !== 'https') location.href = 'https' + location.href.substr(4, location.href.length - 4);
+
+/**
+ * MiroTalk SFU - Room component
+ *
+ * @link    GitHub: https://github.com/miroslavpejic85/mirotalksfu
+ * @link    Official Live demo: https://sfu.mirotalk.com
+ * @license For open source use: AGPLv3
+ * @license For commercial or closed source, contact us at license.mirotalk@gmail.com or purchase directly via CodeCanyon
+ * @license CodeCanyon: https://codecanyon.net/item/mirotalk-sfu-webrtc-realtime-video-conferences/40769970
+ * @author  Miroslav Pejic - miroslav.pejic.85@gmail.com
+ * @version 2.0.53
+ *
+ */
+
+// ####################################################
+// STATIC SETTINGS
+// ####################################################
+
+console.log('Window Location', window.location);
+
+const userAgent = navigator.userAgent;
+const parser = new UAParser(userAgent);
+const parserResult = parser.getResult();
+const deviceType = parserResult.device.type || 'desktop';
+const isMobileDevice = deviceType === 'mobile';
+const isTabletDevice = deviceType === 'tablet';
+const isIPadDevice = parserResult.device.model?.toLowerCase() === 'ipad';
+const isDesktopDevice = deviceType === 'desktop';
+const isFirefox = parserResult.browser.name?.toLowerCase() === 'firefox';
+const thisInfo = getInfo();
+
+const isEmbedded = window.self !== window.top;
+const showDocumentPipBtn = !isEmbedded && 'documentPictureInPicture' in window;
+
+/**
+ * Initializes a Socket.IO client instance with custom connection and reconnection options.
+ *
+ * @property {string[]} transports - The transport mechanisms to use. Default: ['polling', 'websocket']. Here, only ['websocket'] is used.
+ * @property {boolean} reconnection - Whether to automatically reconnect if connection is lost. Default: true.
+ * @property {number} reconnectionAttempts - Maximum number of reconnection attempts before giving up. Default: Infinity. Here, set to 10.
+ * @property {number} reconnectionDelay - How long to initially wait before attempting a new reconnection (in ms). Default: 1000. Here, set to 3000.
+ * @property {number} reconnectionDelayMax - Maximum amount of time to wait between reconnections (in ms). Default: 5000. Here, set to 15000.
+ * @property {number} timeout - Connection timeout before an error is emitted (in ms). Default: 20000.
+ */
+const socket = io({
+    transports: ['websocket'],
+    reconnection: true,
+    reconnectionAttempts: 10,
+    reconnectionDelay: 3000,
+    reconnectionDelayMax: 15000,
+    timeout: 20000,
+});
+
+let survey = {
+    enabled: true,
+    url: 'https://www.questionpro.com/t/AUs7VZq02P',
+};
+
+let redirect = {
+    enabled: true,
+    url: '/newroom',
+};
+
+let recCodecs = null;
+let isToggleExtraBtnClicked = false;
+
+const _PEER = {
+    presenter: '<i class="fa-solid fa-user-shield"></i>',
+    guest: '<i class="fa-solid fa-signal"></i>',
+    audioOn: '<i class="fas fa-microphone"></i>',
+    audioOff: '<i class="fas fa-microphone-slash red"></i>',
+    videoOn: '<i class="fas fa-video"></i>',
+    videoOff: '<i class="fas fa-video-slash red"></i>',
+    screenOn: '<i class="fas fa-desktop"></i>',
+    screenOff: '<i class="fas fa-desktop red"></i>',
+    raiseHand: '<i style="color: rgb(0, 255, 71);" class="fas fa-hand-paper pulsate"></i>',
+    lowerHand: '',
+    acceptPeer: '<i class="fas fa-check"></i>',
+    banPeer: '<i class="fas fa-ban red"></i>',
+    ejectPeer: '<i class="fas fa-right-from-bracket red"></i>',
+    geoLocation: '<i class="fas fa-location-dot"></i>',
+    sendFile: '<i class="fas fa-upload"></i>',
+    sendMsg: '<i class="fas fa-paper-plane"></i>',
+    sendVideo: '<i class="fab fa-youtube"></i>',
+};
+
+const initUser = document.getElementById('initUser');
+const initVideoContainerClass = document.querySelector('.init-video-container');
+const bars = document.querySelectorAll('.volume-bar');
+
+const Base64Prefix = 'data:application/pdf;base64,';
+
+// Whiteboard
+const wbImageInput = 'image/*';
+const wbPdfInput = 'application/pdf';
+// Reference dimensions for whiteboard (16:9 aspect ratio)
+const wbReferenceWidth = 1920;
+const wbReferenceHeight = 1080;
+const wbGridSize = 20;
+const wbStroke = '#cccccc63';
+let wbGridLines = [];
+let wbGridVisible = false;
+
+const swalImageUrl = '../images/pricing-illustration.svg';
+
+// Media
+const sinkId = 'sinkId' in HTMLMediaElement.prototype;
+
+// ####################################################
+// LOCAL STORAGE
+// ####################################################
+
+const lS = new LocalStorage();
+const ls = typeof window !== 'undefined' && window.ls ? window.ls : lS;
+
+function cloneObject(obj) {
+    return JSON.parse(JSON.stringify(obj));
+}
+
+function safeLoadLocalStorage(getter, defaults, label) {
+    try {
+        const stored = getter();
+        if (stored && typeof stored === 'object') {
+            return mergeConfig(cloneObject(defaults), stored);
+        }
+    } catch (error) {
+        console.warn(`Failed to load ${label} from localStorage`, error);
+    }
+    return cloneObject(defaults);
+}
+
+const localStorageSettings = safeLoadLocalStorage(() => lS.getLocalStorageSettings(), lS.SFU_SETTINGS, 'settings');
+
+const localStorageDevices = safeLoadLocalStorage(
+    () => lS.getLocalStorageDevices(),
+    lS.LOCAL_STORAGE_DEVICES,
+    'devices'
+);
+
+const localStorageInitConfig = safeLoadLocalStorage(
+    () => lS.getLocalStorageInitConfig(),
+    lS.INIT_CONFIG,
+    'init config'
+);
+
+// Avoid automatic camera/microphone requests on join.
+const autoStartDevices = false;
+
+console.log('LOCAL_STORAGE', {
+    localStorageSettings: localStorageSettings,
+    localStorageDevices: localStorageDevices,
+    localStorageInitConfig: localStorageInitConfig,
+});
+
+// ####################################################
+// THEME CUSTOM COLOR - PICKER
+// ####################################################
+
+const themeCustom = {
+    input: document.getElementById('themeColorPicker'),
+    color: localStorageSettings.theme_color ? localStorageSettings.theme_color : '#000000',
+    keep: localStorageSettings.theme_custom ? localStorageSettings.theme_custom : false,
+};
+
+const pickr = Pickr.create({
+    el: themeCustom.input,
+    theme: 'classic', // or 'monolith', or 'nano'
+    default: themeCustom.color,
+    useAsButton: true,
+
+    swatches: [
+        'rgba(244, 67, 54, 1)',
+        'rgba(233, 30, 99, 0.95)',
+        'rgba(156, 39, 176, 0.9)',
+        'rgba(103, 58, 183, 0.85)',
+        'rgba(63, 81, 181, 0.8)',
+        'rgba(33, 150, 243, 0.75)',
+        'rgba(3, 169, 244, 0.7)',
+        'rgba(0, 188, 212, 0.7)',
+        'rgba(0, 150, 136, 0.75)',
+        'rgba(76, 175, 80, 0.8)',
+        'rgba(139, 195, 74, 0.85)',
+        'rgba(205, 220, 57, 0.9)',
+        'rgba(255, 235, 59, 0.95)',
+        'rgba(255, 193, 7, 1)',
+    ],
+
+    components: {
+        // Main components
+        preview: true,
+        opacity: true,
+        hue: true,
+
+        // Input / output Options
+        interaction: {
+            hex: false,
+            rgba: false,
+            hsla: false,
+            hsva: false,
+            cmyk: false,
+            input: false,
+            clear: false,
+            save: false,
+        },
+    },
+})
+    .on('init', (pickr) => {
+        themeCustom.input.value = pickr.getSelectedColor().toHEXA().toString(0);
+    })
+    .on('change', (color) => {
+        themeCustom.color = color.toHEXA().toString();
+        themeCustom.input.value = themeCustom.color;
+        setCustomTheme();
+    })
+    .on('changestop', (color) => {
+        localStorageSettings.theme_color = themeCustom.color;
+        lS.setSettings(localStorageSettings);
+    });
+
+// ####################################################
+// ENUMERATE DEVICES SELECTS
+// ####################################################
+
+const participantsCountBadge = getId('participantsCountBadge');
+const videoSelect = getId('videoSelect');
+const videoQuality = getId('videoQuality');
+const videoFps = getId('videoFps');
+const screenFps = getId('screenFps');
+const screenOptimization = getId('screenOptimization');
+const initVideoSelect = getId('initVideoSelect');
+const microphoneSelect = getId('microphoneSelect');
+const initMicrophoneSelect = getId('initMicrophoneSelect');
+const speakerSelect = getId('speakerSelect');
+const initSpeakerSelect = getId('initSpeakerSelect');
+
+// ####################################################
+// VIRTUAL BACKGROUND DEFAULT IMAGES AND INIT CLASS
+// ####################################################
+
+const virtualBackgrounds = Object.values(image.virtualBackground);
+
+const virtualBackground = new VirtualBackground();
+
+const isMediaStreamTrackAndTransformerSupported = virtualBackground.checkSupport();
+
+// ####################################################
+// DYNAMIC SETTINGS
+// ####################################################
+
+let preventExit = false;
+
+let virtualBackgroundBlurLevel;
+let virtualBackgroundSelectedImage;
+let virtualBackgroundTransparent;
+
+let swalBackground = 'radial-gradient(#393939, #000000)'; //'rgba(0, 0, 0, 0.7)';
+
+let rc = null;
+let producer = null;
+let participantsCount = 0;
+let lobbyParticipantsCount = 0;
+let chatMessagesId = 0;
+let buttonsHandlersInitialized = false;
+
+// Cache frequently used control elements to avoid relying on implicit globals.
+const control = document.getElementById('control');
+const bottomButtons = document.getElementById('bottomButtons');
+const toggleExtraButton = document.getElementById('toggleExtraButton');
+const tabNotificationsBtn = document.getElementById('tabNotificationsBtn');
+const notifyAdminCleanBtn = document.getElementById('notifyAdminCleanBtn');
+
+let room_id = getRoomId();
+let room_password = getRoomPassword();
+let room_duration = getRoomDuration();
+let peer_name = getPeerName();
+let peer_avatar = getPeerAvatar();
+let peer_uuid = getPeerUUID();
+let peer_token = getPeerToken();
+let isScreenAllowed = getScreen();
+let isHideMeActive = getHideMeActive();
+let notify = getNotify();
+let chat = getChat();
+isPresenter = isPeerPresenter();
+
+let peer_info = null;
+
+let isPushToTalkActive = false;
+let isSpaceDown = false;
+let isPitchBarEnabled = true;
+let isSoundEnabled = true;
+let isKeepButtonsVisible = false;
+let isShortcutsEnabled = false;
+let isBroadcastingEnabled = false;
+let isLobbyEnabled = false;
+let hostOnlyRecording = false;
+let isEnumerateAudioDevices = false;
+let isEnumerateVideoDevices = false;
+let isAudioAllowed = false;
+let isVideoAllowed = false;
+let isVideoPrivacyActive = false;
+let isRecording = false;
+let isAudioVideoAllowed = false;
+let isParticipantsListOpen = false;
+let isVideoControlsOn = false;
+let isChatPasteTxt = false;
+let isChatMarkdownOn = false;
+let isChatGPTOn = false;
+let isDeepSeekOn = false;
+let isSpeechSynthesisSupported = 'speechSynthesis' in window;
+let joinRoomWithoutAudioVideo = true;
+let joinRoomWithScreen = false;
+
+let audio = false;
+let video = false;
+let screen = false;
+let hand = false;
+let camera = 'user';
+
+let recTimer = null;
+let recElapsedTime = null;
+let recShowInfo = true;
+
+let wbCanvas = null;
+let wbIsLock = false;
+let wbIsDrawing = false;
+let wbIsOpen = false;
+let wbIsRedoing = false;
+let wbIsEraser = false;
+let wbIsVanishing = false;
+let wbIsBgTransparent = false;
+let wbPop = [];
+let wbVanishingObjects = [];
+let coords = {};
+
+let isButtonsVisible = false;
+let isButtonsBarOver = false;
+
+let isRoomLocked = false;
+
+let initStream = null;
+let isInitVideoLoaded = false;
+
+let audioContext = null;
+let workletNode = null;
+
+// window.location.origin + '/join/' + roomId
+// window.location.origin + '/join/?room=' + roomId + '&token=' + myToken
+
+let RoomURL = window.location.origin + '/join/' + room_id;
+
+let isExiting = false;
+
+let transcription;
+
+let showFreeAvatars = true;
+
+let quill = null;
+
+// ####################################################
+// INIT ROOM
+// ####################################################
+
+document.addEventListener('DOMContentLoaded', function () {
+    initCursorLightEffect();
+    initClient().catch((error) => console.error('Error during client init', error));
+});
+
+// ####################################################
+// MOUSE CURSOR LIGHT EFFECT
+// ####################################################
+
+function initCursorLightEffect() {
+    if (!videoMediaContainer || !isDesktopDevice) return;
+    videoMediaContainer.classList.add('mouse-light');
+    videoMediaContainer.addEventListener('mousemove', function (e) {
+        const rect = videoMediaContainer.getBoundingClientRect();
+        const x = ((e.clientX - rect.left) / rect.width) * 100;
+        const y = ((e.clientY - rect.top) / rect.height) * 100;
+        videoMediaContainer.style.setProperty('--mouse-x', x + '%');
+        videoMediaContainer.style.setProperty('--mouse-y', y + '%');
+    });
+}
+
+async function initClient() {
+    setTheme();
+
+    // Transcription
+    transcription = new Transcription();
+    transcription.init();
+
+    if (!isMobileDevice) {
+        refreshMainButtonsToolTipPlacement();
+        setTippy('mySettingsCloseBtn', 'Close', 'bottom');
+        setTippy(
+            'switchDominantSpeakerFocus',
+            'If Active, When a participant speaks, their video will be focused and enlarged',
+            'right'
+        );
+        setTippy(
+            'switchNoiseSuppression',
+            'If Active, the audio will be processed to reduce background noise, making the voice clearer',
+            'right'
+        );
+        setTippy(
+            'switchPushToTalk',
+            'If Active, When SpaceBar keydown the microphone will be resumed, on keyup will be paused, like a walkie-talkie',
+            'right'
+        );
+        setTippy('lobbyAcceptAllBtn', 'Accept', 'top');
+        setTippy('lobbyRejectAllBtn', 'Reject', 'top');
+        setTippy(
+            'switchBroadcasting',
+            'Broadcasting is the dissemination of audio or video content to a large audience (one to many)',
+            'right'
+        );
+        setTippy(
+            'switchLobby',
+            'Lobby mode lets you protect your meeting by only allowing people to enter after a formal approval by a moderator',
+            'right'
+        );
+        setTippy('initVideoAudioRefreshButton', 'Refresh audio/video devices', 'top');
+        setTippy(
+            'screenOptimizationLabel',
+            'Detail: For high fidelity (screen sharing with text/graphics)<br />Motion: For high frame rate (video playback, game streaming',
+            'right',
+            true
+        );
+        setTippy('switchPitchBar', 'Toggle audio pitch bar', 'right');
+        setTippy('switchSounds', 'Toggle the sounds notifications', 'right');
+        setTippy('switchShare', "Show 'Share Room' popup on join", 'right');
+        setTippy('switchKeepButtonsVisible', 'Keep buttons always visible', 'right');
+        setTippy('roomId', 'Room name (click to copy)', 'right');
+        setTippy('sessionTime', 'Session time', 'right');
+        setTippy('recordingImage', 'Toggle recording', 'right');
+        setTippy(
+            'switchHostOnlyRecording',
+            'Only the host (presenter) has the capability to record the meeting',
+            'right'
+        );
+        setTippy('refreshVideoFiles', 'Refresh', 'left');
+        setTippy('switchServerRecording', 'The recording will be stored on the server rather than locally', 'right');
+        setTippy('whiteboardGhostButton', 'Toggle transparent background', 'bottom');
+        setTippy('whiteboardGridBtn', 'Toggle whiteboard grid', 'bottom');
+        setTippy('wbBackgroundColorEl', 'Background color', 'bottom');
+        setTippy('wbDrawingColorEl', 'Drawing color', 'bottom');
+        setTippy('whiteboardPencilBtn', 'Drawing mode', 'bottom');
+        setTippy('whiteboardVanishingBtn', 'Vanishing pen (disappears in 5s)', 'bottom');
+        setTippy('whiteboardEraserBtn', 'Eraser', 'bottom');
+        setTippy('whiteboardObjectBtn', 'Object mode', 'bottom');
+        setTippy('whiteboardUndoBtn', 'Undo', 'bottom');
+        setTippy('whiteboardRedoBtn', 'Redo', 'bottom');
+        setTippy('whiteboardLockBtn', 'Toggle Lock whiteboard', 'right');
+        setTippy('whiteboardUnlockBtn', 'Toggle Lock whiteboard', 'right');
+        setTippy('whiteboardCloseBtn', 'Close', 'right');
+        setTippy('chatCleanTextButton', 'Clean', 'top');
+        setTippy('chatPasteButton', 'Paste', 'top');
+        setTippy('chatSendButton', 'Send', 'top');
+        setTippy('showChatOnMsg', 'Show chat on new message comes', 'bottom');
+        setTippy('speechIncomingMsg', 'Speech the incoming messages', 'bottom');
+        setTippy('chatSpeechStartButton', 'Start speech recognition', 'top');
+        setTippy('chatSpeechStopButton', 'Stop speech recognition', 'top');
+        setTippy('chatEmojiButton', 'Emoji', 'top');
+        setTippy('chatMarkdownButton', 'Markdown', 'top');
+        setTippy('chatCloseButton', 'Close', 'bottom');
+        setTippy('chatTogglePin', 'Toggle pin', 'bottom');
+        setTippy('chatHideParticipantsList', 'Hide', 'bottom');
+        if (document.getElementById('chatShowParticipantsList')) {
+            setTippy('chatShowParticipantsList', 'Toggle participants list', 'bottom');
+        }
+        setTippy('chatMaxButton', 'Maximize', 'bottom');
+        setTippy('chatMinButton', 'Minimize', 'bottom');
+        setTippy('pollTogglePin', 'Toggle pin', 'bottom');
+        setTippy('pollMaxButton', 'Maximize', 'bottom');
+        setTippy('pollMinButton', 'Minimize', 'bottom');
+        setTippy('pollSaveButton', 'Save results', 'bottom');
+        setTippy('pollCloseBtn', 'Close', 'bottom');
+        setTippy('editorLockBtn', 'Toggle Lock editor', 'bottom');
+        setTippy('editorUnlockBtn', 'Toggle Lock editor', 'bottom');
+        setTippy('editorTogglePin', 'Toggle pin', 'bottom');
+        setTippy('editorUndoBtn', 'Undo', 'bottom');
+        setTippy('editorRedoBtn', 'Redo', 'bottom');
+        setTippy('editorCopyBtn', 'Copy', 'bottom');
+        setTippy('editorSaveBtn', 'Save', 'bottom');
+        setTippy('editorCloseBtn', 'Close', 'bottom');
+        setTippy('editorCleanBtn', 'Clean', 'bottom');
+        setTippy('pollAddOptionBtn', 'Add option', 'top');
+        setTippy('pollDelOptionBtn', 'Delete option', 'top');
+        setTippy('participantsSaveBtn', 'Save participants info', 'bottom');
+        setTippy('participantsRaiseHandBtn', 'Toggle raise hands', 'bottom');
+        setTippy('participantsUnreadMessagesBtn', 'Toggle unread messages', 'bottom');
+        setTippy('transcriptionCloseBtn', 'Close', 'bottom');
+        setTippy('transcriptionTogglePinBtn', 'Toggle pin', 'bottom');
+        setTippy('transcriptionMaxBtn', 'Maximize', 'bottom');
+        setTippy('transcriptionMinBtn', 'Minimize', 'bottom');
+        setTippy('transcriptionSpeechStatus', 'Status', 'bottom');
+        setTippy('transcriptShowOnMsg', 'Show transcript on new message comes', 'bottom');
+        setTippy('transcriptionSpeechStart', 'Start transcription', 'top');
+        setTippy('transcriptionSpeechStop', 'Stop transcription', 'top');
+    }
+    setupWhiteboard();
+    try {
+        await initEnumerateDevices(autoStartDevices);
+    } catch (error) {
+        console.error('Failed to enumerate devices on init', error);
+    }
+    await initRoom();
+    setupInitButtons();
+    // Ensure control buttons are wired immediately, even before media starts.
+    handleButtons();
+}
+
+// ####################################################
+// HANDLE MAIN BUTTONS TOOLTIP
+// ####################################################
+
+function refreshMainButtonsToolTipPlacement() {
+    if (!isMobileDevice) {
+        //
+        const position = BtnsBarPosition.options[BtnsBarPosition.selectedIndex].value;
+        const placement = position == 'vertical' ? 'right' : 'top';
+        const bPlacement = position == 'vertical' ? 'top' : 'right';
+
+        // Control buttons
+        setTippy('shareButton', 'Поделиться комнатой', placement);
+        setTippy('hideMeButton', 'Скрыть/показать собственное видео', placement);
+        setTippy('startRecButton', 'Начать запись', placement);
+        setTippy('stopRecButton', 'Остановить запись', placement);
+        setTippy('fullScreenButton', 'Включить/выключить полноэкранный режим', placement);
+        setTippy('emojiRoomButton', 'Показать/скрыть реакции', placement);
+        setTippy('pollButton', 'Открыть/закрыть опрос', placement);
+        setTippy('editorButton', 'Открыть/закрыть редактор', placement);
+        setTippy('transcriptionButton', 'Включить/выключить транскрипцию', placement);
+        setTippy('whiteboardButton', 'Показать/скрыть доску', placement);
+        setTippy('documentPiPButton', 'Документ в режиме "картинка в картинке"', placement);
+        setTippy('snapshotRoomButton', 'Снимок экрана, окна или вкладки', placement);
+        setTippy('restartICEButton', 'Перезапустить ICE', placement);
+        setTippy('aboutButton', 'О проекте', placement);
+
+        // Bottom buttons
+        setTippy('toggleExtraButton', 'Показать/скрыть дополнительные кнопки', bPlacement);
+        setTippy('startAudioButton', 'Включить звук', bPlacement);
+        setTippy('stopAudioButton', 'Выключить звук', bPlacement);
+        setTippy('startVideoButton', 'Включить видео', bPlacement);
+        setTippy('stopVideoButton', 'Выключить видео', bPlacement);
+        setTippy('swapCameraButton', 'Поменять камеру', bPlacement);
+        setTippy('startScreenButton', 'Начать демонстрацию экрана', bPlacement);
+        setTippy('stopScreenButton', 'Остановить демонстрацию экрана', bPlacement);
+        setTippy('raiseHandButton', 'Поднять руку', bPlacement);
+        setTippy('lowerHandButton', 'Опустить руку', bPlacement);
+        setTippy('chatButton', 'Открыть/закрыть чат', bPlacement);
+        if (document.getElementById('participantsButton')) {
+            setTippy('participantsButton', 'Показать/скрыть список участников', bPlacement);
+        }
+        setTippy('settingsButton', 'Открыть настройки', bPlacement);
+        setTippy('exitButton', 'Выйти из комнаты', bPlacement);
+    }
+}
+
+// ####################################################
+// HANDLE TOOLTIP
+// ####################################################
+
+function setTippy(elem, content, placement, allowHTML = false) {
+    const element = document.getElementById(elem);
+    if (element) {
+        if (element._tippy) {
+            element._tippy.destroy();
+        }
+        try {
+            tippy(element, {
+                content: content,
+                placement: placement,
+                allowHTML: allowHTML,
+            });
+        } catch (err) {
+            console.error('setTippy error', err.message);
+        }
+    } else {
+        console.warn('setTippy element not found with content', content);
+    }
+}
+
+// ####################################################
+// HELPERS
+// ####################################################
+
+function getQueryParam(param) {
+    const urlParams = new URLSearchParams(window.location.search);
+    return filterXSS(urlParams.get(param));
+}
+
+// ####################################################
+// GET ROOM ID
+// ####################################################
+
+function getRoomId() {
+    let queryRoomId = getQueryParam('room');
+    let roomId = queryRoomId ? queryRoomId : location.pathname.substring(6);
+    if (roomId == '') {
+        roomId = makeId(12);
+    }
+    console.log('Direct join', { room: roomId });
+    window.localStorage.lastRoom = roomId;
+    return roomId;
+}
+
+function makeId(length) {
+    let result = '';
+    let characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    let charactersLength = characters.length;
+    for (let i = 0; i < length; i++) {
+        result += characters.charAt(Math.floor(Math.random() * charactersLength));
+    }
+    return result;
+}
+
+// ####################################################
+// INIT ROOM
+// ####################################################
+
+async function initRoom() {
+    if (!isAudioAllowed && !isVideoAllowed && !joinRoomWithoutAudioVideo) {
+        openURL(`/permission?room_id=${room_id}&message=Not allowed both Audio and Video`);
+    } else {
+        setButtonsInit();
+        handleSelectsInit();
+        handleUsernameEmojiPicker();
+        await whoAreYou();
+        await setSelectsInit();
+    }
+}
+
+// ####################################################
+// ENUMERATE DEVICES
+// ####################################################
+
+async function initEnumerateDevices(requestPermissions = false) {
+    console.log('01 ----> init Enumerate Devices');
+    await initEnumerateVideoDevices(requestPermissions);
+    await initEnumerateAudioDevices(requestPermissions);
+}
+
+async function refreshMyAudioVideoDevices() {
+    await refreshMyVideoDevices();
+    await refreshMyAudioDevices();
+}
+
+async function refreshMyVideoDevices() {
+    const initVideoSelectIndex = initVideoSelect ? initVideoSelect.selectedIndex : 0;
+    const videoSelectIndex = videoSelect ? videoSelect.selectedIndex : 0;
+    await initEnumerateVideoDevices();
+    if (initVideoSelect) initVideoSelect.selectedIndex = initVideoSelectIndex;
+    if (videoSelect) videoSelect.selectedIndex = videoSelectIndex;
+}
+
+async function refreshMyAudioDevices() {
+    const initMicrophoneSelectIndex = initMicrophoneSelect ? initMicrophoneSelect.selectedIndex : 0;
+    const initSpeakerSelectIndex = initSpeakerSelect ? initSpeakerSelect.selectedIndex : 0;
+    const microphoneSelectIndex = microphoneSelect ? microphoneSelect.selectedIndex : 0;
+    const speakerSelectIndex = speakerSelect ? speakerSelect.selectedIndex : 0;
+    await initEnumerateAudioDevices();
+    if (initMicrophoneSelect) initMicrophoneSelect.selectedIndex = initMicrophoneSelectIndex;
+    if (initSpeakerSelect) initSpeakerSelect.selectedIndex = initSpeakerSelectIndex;
+    if (microphoneSelect) microphoneSelect.selectedIndex = microphoneSelectIndex;
+    if (speakerSelect) speakerSelect.selectedIndex = speakerSelectIndex;
+}
+
+async function initEnumerateVideoDevices(requestPermissions = false) {
+    let stream = null;
+
+    try {
+        if (requestPermissions) {
+            stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        }
+        await enumerateVideoDevices(stream);
+    } catch (error) {
+        if (requestPermissions) {
+            handleDeviceRequestError('camera', error);
+        }
+        isEnumerateVideoDevices = false;
+    } finally {
+        if (stream) await stopTracks(stream);
+    }
+}
+
+async function enumerateVideoDevices(stream) {
+    console.log('02 ----> Get Video Devices');
+
+    if (videoSelect) videoSelect.innerHTML = '';
+    if (initVideoSelect) initVideoSelect.innerHTML = '';
+
+    await navigator.mediaDevices
+        .enumerateDevices()
+        .then((devices) =>
+            devices.forEach(async (device) => {
+                let el,
+                    eli = null;
+                if ('videoinput' === device.kind) {
+                    if (videoSelect) el = videoSelect;
+                    if (initVideoSelect) eli = initVideoSelect;
+                    lS.DEVICES_COUNT.video++;
+                }
+                if (!el) return;
+                await addChild(device, [el, eli]);
+            })
+        )
+        .then(async () => {
+            if (stream) await stopTracks(stream);
+            isEnumerateVideoDevices = true;
+        });
+}
+
+async function initEnumerateAudioDevices(requestPermissions = false) {
+    let stream = null;
+
+    try {
+        if (requestPermissions) {
+            stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        }
+        await enumerateAudioDevices(stream);
+        if (stream) {
+            await getMicrophoneVolumeIndicator(stream);
+        }
+    } catch (error) {
+        if (requestPermissions) {
+            handleDeviceRequestError('microphone', error);
+        }
+        isEnumerateAudioDevices = false;
+    } finally {
+        if (stream) await stopTracks(stream);
+    }
+}
+
+async function enumerateAudioDevices(stream) {
+    console.log('03 ----> Get Audio Devices');
+
+    if (microphoneSelect) microphoneSelect.innerHTML = '';
+    if (initMicrophoneSelect) initMicrophoneSelect.innerHTML = '';
+
+    if (speakerSelect) speakerSelect.innerHTML = '';
+    if (initSpeakerSelect) initSpeakerSelect.innerHTML = '';
+
+    await navigator.mediaDevices
+        .enumerateDevices()
+        .then((devices) =>
+            devices.forEach(async (device) => {
+                let el,
+                    eli = null;
+                if ('audioinput' === device.kind) {
+                    if (microphoneSelect) el = microphoneSelect;
+                    if (initMicrophoneSelect) eli = initMicrophoneSelect;
+                    lS.DEVICES_COUNT.audio++;
+                } else if ('audiooutput' === device.kind) {
+                    if (speakerSelect) el = speakerSelect;
+                    if (initSpeakerSelect) eli = initSpeakerSelect;
+                    lS.DEVICES_COUNT.speaker++;
+                }
+                if (!el) return;
+                await addChild(device, [el, eli]);
+            })
+        )
+        .then(async () => {
+            if (stream) await stopTracks(stream);
+            isEnumerateAudioDevices = true;
+            speakerSelect.disabled = !sinkId;
+            // Check if there is speakers
+            if (!sinkId || initSpeakerSelect.options.length === 0) {
+                hide(initSpeakerSelect);
+                hide(speakerSelectDiv);
+            }
+        });
+}
+
+async function stopTracks(stream) {
+    stream.getTracks().forEach((track) => {
+        track.stop();
+    });
+}
+
+async function addChild(device, els) {
+    let kind = device.kind;
+    els.forEach((el) => {
+        let option = document.createElement('option');
+        option.value = device.deviceId;
+        switch (kind) {
+            case 'videoinput':
+                option.innerText = `📹 ` + device.label || `📹 camera ${el.length + 1}`;
+                break;
+            case 'audioinput':
+                option.innerText = `🎤 ` + device.label || `🎤 microphone ${el.length + 1}`;
+                break;
+            case 'audiooutput':
+                option.innerText = `🔈 ` + device.label || `🔈 speaker ${el.length + 1}`;
+                break;
+            default:
+                break;
+        }
+        el.appendChild(option);
+    });
+}
+
+// ####################################################
+// INIT AUDIO/VIDEO/SCREEN BUTTONS
+// ####################################################
+
+function setupInitButtons() {
+    initVideoAudioRefreshButton.onclick = () => {
+        refreshMyAudioVideoDevices();
+    };
+    initVideoButton.onclick = () => {
+        handleVideo();
+    };
+    initAudioButton.onclick = () => {
+        handleAudio();
+    };
+    initAudioVideoButton.onclick = async (e) => {
+        await handleAudioVideo(e);
+    };
+    initStartScreenButton.onclick = async () => {
+        await toggleScreenSharing();
+    };
+    initStopScreenButton.onclick = async () => {
+        await toggleScreenSharing();
+    };
+    initVideoMirrorButton.onclick = () => {
+        initVideo.classList.toggle('mirror');
+    };
+    initVirtualBackgroundButton.onclick = () => {
+        showImageSelector();
+    };
+    initUsernameEmojiButton.onclick = () => {
+        getId('usernameInput').value = '';
+        toggleUsernameEmoji();
+    };
+}
+
+// ####################################################
+// MICROPHONE VOLUME INDICATOR
+// ####################################################
+
+async function getMicrophoneVolumeIndicator(stream) {
+    if (isAudioContextSupported() && hasAudioTrack(stream)) {
+        try {
+            stopMicrophoneProcessing();
+            console.log('Start microphone volume indicator for audio track', stream.getAudioTracks()[0]);
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            const microphone = audioContext.createMediaStreamSource(stream);
+            await audioContext.audioWorklet.addModule('/js/VolumeProcessor.js');
+            workletNode = new AudioWorkletNode(audioContext, 'volume-processor');
+
+            // Handle data from VolumeProcessor.js
+            workletNode.port.onmessage = (event) => {
+                const data = event.data;
+                switch (data.type) {
+                    case 'volumeIndicator':
+                        updateVolumeIndicator(data.volume);
+                        break;
+                    //...
+                    default:
+                        console.warn('Unknown message type from VolumeProcessor:', data.type);
+                        break;
+                }
+            };
+
+            microphone.connect(workletNode);
+            workletNode.connect(audioContext.destination);
+        } catch (error) {
+            console.error('Error initializing microphone volume indicator:', error);
+            stopMicrophoneProcessing();
+        }
+    } else {
+        console.warn('Microphone volume indicator not supported for this browser');
+    }
+}
+
+function stopMicrophoneProcessing() {
+    console.log('Stop microphone volume indicator');
+    if (workletNode) {
+        try {
+            workletNode.disconnect();
+        } catch (error) {
+            console.warn('Error disconnecting workletNode:', error);
+        }
+        workletNode = null;
+    }
+    if (audioContext) {
+        try {
+            if (audioContext.state !== 'closed') {
+                audioContext.close();
+            }
+        } catch (error) {
+            console.warn('Error closing audioContext:', error);
+        }
+        audioContext = null;
+    }
+}
+
+function updateVolumeIndicator(volume) {
+    const normalizedVolume = Math.max(0, Math.min(1, volume));
+    const activeBars = Math.round(normalizedVolume * bars.length);
+    bars.forEach((bar, index) => {
+        bar.classList.toggle('active', index < activeBars);
+    });
+}
+
+function isAudioContextSupported() {
+    return !!(window.AudioContext || window.webkitAudioContext);
+}
+
+function hasAudioTrack(mediaStream) {
+    if (!mediaStream) return false;
+    const audioTracks = mediaStream.getAudioTracks();
+    return audioTracks.length > 0;
+}
+
+function hasVideoTrack(mediaStream) {
+    if (!mediaStream) return false;
+    const videoTracks = mediaStream.getVideoTracks();
+    return videoTracks.length > 0;
+}
+
+// ####################################################
+// REQUEST LOCAL MEDIA
+// ####################################################
+
+// Requesting camera/microphone access only happens through these helpers,
+// which are wired to explicit user actions (or direct URL/query flags).
+async function requestMicrophone() {
+    setAudioButtonsDisabled(true);
+
+    try {
+        if (!isEnumerateAudioDevices) await initEnumerateAudioDevices();
+
+        const producerExist = rc.producerExist(RoomClient.mediaType.audio);
+        console.log('START AUDIO producerExist --->', producerExist);
+
+        producerExist
+            ? await rc.resumeProducer(RoomClient.mediaType.audio)
+            : await rc.produce(RoomClient.mediaType.audio, microphoneSelect.value);
+
+        rc.updatePeerInfo(peer_name, socket.id, 'audio', true);
+        isAudioAllowed = true;
+        await refreshMyAudioDevices();
+    } catch (error) {
+        handleDeviceRequestError('microphone', error);
+    } finally {
+        setAudioButtonsDisabled(false);
+    }
+}
+
+async function requestCamera() {
+    setVideoButtonsDisabled(true);
+
+    try {
+        if (!isEnumerateVideoDevices) await initEnumerateVideoDevices();
+
+        const producerExist = rc.producerExist(RoomClient.mediaType.video);
+        console.log('START VIDEO producerExist --->', producerExist);
+
+        producerExist
+            ? await rc.resumeProducer(RoomClient.mediaType.video)
+            : await rc.produce(RoomClient.mediaType.video, videoSelect.value);
+
+        rc.updatePeerInfo(peer_name, socket.id, 'video', true);
+        isVideoAllowed = true;
+        await refreshMyVideoDevices();
+    } catch (error) {
+        handleDeviceRequestError('camera', error);
+    } finally {
+        setVideoButtonsDisabled(false);
+    }
+}
+
+// ####################################################
+// QUERY PARAMS CHECK
+// ####################################################
+
+function getScreen() {
+    let screen = getQueryParam('screen');
+    if (screen) {
+        screen = screen.toLowerCase();
+        let queryScreen = screen === '1' || screen === 'true';
+        if (queryScreen != null && (navigator.getDisplayMedia || navigator.mediaDevices.getDisplayMedia)) {
+            console.log('Direct join', { screen: queryScreen });
+            return queryScreen;
+        }
+    }
+    console.log('Direct join', { screen: false });
+    return false;
+}
+
+function getNotify() {
+    let notify = getQueryParam('notify');
+    if (notify) {
+        notify = notify.toLowerCase();
+        let queryNotify = notify === '1' || notify === 'true';
+        if (queryNotify != null) {
+            console.log('Direct join', { notify: queryNotify });
+            return queryNotify;
+        }
+    }
+    notify = localStorageSettings.share_on_join;
+    console.log('Direct join', { notify: notify });
+    return notify;
+}
+
+function getChat() {
+    let chat = getQueryParam('chat');
+    if (chat) {
+        chat = chat.toLowerCase();
+        let queryChat = chat === '1' || chat === 'true';
+        if (queryChat != null) {
+            console.log('Direct join', { chat: queryChat });
+            return queryChat;
+        }
+    }
+    console.log('Direct join', { chat: chat });
+    return chat;
+}
+
+function getHideMeActive() {
+    let hide = getQueryParam('hide');
+    let queryHideMe = false;
+    if (hide) {
+        hide = hide.toLowerCase();
+        queryHideMe = hide === '1' || hide === 'true';
+    }
+    console.log('Direct join', { hide: queryHideMe });
+    return queryHideMe;
+}
+
+function isPeerPresenter() {
+    let presenter = getQueryParam('isPresenter');
+    if (presenter) {
+        presenter = presenter.toLowerCase();
+        let queryPresenter = presenter === '1' || presenter === 'true';
+        if (queryPresenter != null) {
+            console.log('Direct join Reconnect', { isPresenter: queryPresenter });
+            return queryPresenter;
+        }
+    }
+    console.log('Direct join Reconnect', { presenter: false });
+    return false;
+}
+
+function getPeerName() {
+    const name = getQueryParam('name');
+    if (isHtml(name)) {
+        console.log('Direct join', { name: 'Invalid name' });
+        return 'Invalid name';
+    }
+    console.log('Direct join', { name: name });
+
+    if (isValidEmail(name)) {
+        getId('notifyEmailInput').value = name;
+    }
+
+    return name;
+}
+
+function getPeerAvatar() {
+    const avatar = getQueryParam('avatar');
+    const avatarDisabled = avatar === '0' || avatar === 'false';
+    console.log('Direct join', { avatar: avatar });
+    if (avatarDisabled || !isImageURL(avatar)) {
+        return false;
+    }
+    return avatar;
+}
+
+function getPeerUUID() {
+    if (lS.getItemLocalStorage('peer_uuid')) {
+        return lS.getItemLocalStorage('peer_uuid');
+    }
+    const peer_uuid = getUUID();
+    lS.setItemLocalStorage('peer_uuid', peer_uuid);
+    return peer_uuid;
+}
+
+function getPeerToken() {
+    if (window.sessionStorage.peer_token) return window.sessionStorage.peer_token;
+    let token = getQueryParam('token');
+    let queryToken = false;
+    if (token) {
+        queryToken = token;
+    }
+    console.log('Direct join', { token: queryToken });
+    return queryToken;
+}
+
+function getRoomPassword() {
+    let roomPassword = getQueryParam('roomPassword');
+    if (roomPassword) {
+        let queryNoRoomPassword = roomPassword === '0' || roomPassword === 'false';
+        if (queryNoRoomPassword) {
+            roomPassword = false;
+        }
+        console.log('Direct join', { password: roomPassword });
+        return roomPassword;
+    }
+    return false;
+}
+
+function getRoomDuration() {
+    const roomDuration = getQueryParam('duration');
+
+    if (isValidDuration(roomDuration)) {
+        if (roomDuration === 'unlimited') {
+            console.log('The room has no time limit');
+            return roomDuration;
+        }
+        const timeLimit = timeToMilliseconds(roomDuration);
+        setTimeout(() => {
+            sound('eject');
+            Swal.fire({
+                background: swalBackground,
+                position: 'center',
+                title: 'Time Limit Reached',
+                text: 'The room has reached its time limit and will close shortly',
+                icon: 'warning',
+                timer: 6000, // 6 seconds
+                timerProgressBar: true,
+                showConfirmButton: false,
+                allowOutsideClick: false,
+                didOpen: () => {
+                    Swal.showLoading();
+                },
+                willClose: () => {
+                    rc.exitRoom(true);
+                },
+            });
+        }, timeLimit);
+
+        console.log('Direct join', { duration: roomDuration, timeLimit: timeLimit });
+        return roomDuration;
+    }
+    return 'unlimited';
+}
+
+function timeToMilliseconds(timeString) {
+    const [hours, minutes, seconds] = timeString.split(':').map(Number);
+    return (hours * 3600 + minutes * 60 + seconds) * 1000;
+}
+
+function isValidDuration(duration) {
+    if (duration === 'unlimited') return true;
+
+    // Check if the format is HH:MM:SS
+    const regex = /^(\d{2}):(\d{2}):(\d{2})$/;
+    const match = duration.match(regex);
+    if (!match) return false;
+    const [hours, minutes, seconds] = match.slice(1).map(Number);
+    // Validate ranges: hours, minutes, and seconds
+    if (hours < 0 || minutes < 0 || minutes > 59 || seconds < 0 || seconds > 59) {
+        return false;
+    }
+    return true;
+}
+
+// ####################################################
+// INIT CONFIG
+// ####################################################
+
+async function checkInitConfig() {
+    const localStorageInitConfig = lS.getLocalStorageInitConfig();
+    console.log('04.5 ----> Get init config', localStorageInitConfig);
+    if (localStorageInitConfig) {
+        if (isAudioVideoAllowed && !localStorageInitConfig.audioVideo) {
+            await handleAudioVideo();
+        } else {
+            if (isAudioAllowed && !localStorageInitConfig.audio) handleAudio();
+            if (isVideoAllowed && !localStorageInitConfig.video) handleVideo();
+        }
+    }
+}
+
+// ####################################################
+// SOME PEER INFO
+// ####################################################
+
+function getPeerInfo() {
+    peer_info = {
+        join_data_time: getDataTimeString(),
+        join_tz_offset: new Date().getTimezoneOffset(),
+        peer_uuid: peer_uuid,
+        peer_id: socket.id,
+        peer_name: peer_name,
+        peer_avatar: peer_avatar,
+        peer_token: peer_token,
+        peer_presenter: isPresenter,
+        peer_audio: isAudioAllowed,
+        peer_audio_volume: 100,
+        peer_video: isVideoAllowed,
+        peer_screen: isScreenAllowed,
+        peer_recording: isRecording,
+        peer_video_privacy: isVideoPrivacyActive,
+        peer_hand: false,
+        is_desktop_device: isDesktopDevice,
+        is_mobile_device: isMobileDevice,
+        is_tablet_device: isTabletDevice,
+        is_ipad_pro_device: isIPadDevice,
+        os_name: parserResult.os.name,
+        os_version: parserResult.os.version,
+        browser_name: parserResult.browser.name,
+        browser_version: parserResult.browser.version,
+        user_agent: userAgent,
+    };
+}
+
+function getInfo() {
+    try {
+        console.log('Info', parserResult);
+
+        const filterUnknown = (obj) => {
+            const filtered = {};
+            for (const [key, value] of Object.entries(obj)) {
+                if (value && value !== 'Unknown') {
+                    filtered[key] = value;
+                }
+            }
+            return filtered;
+        };
+
+        const filteredResult = {
+            //ua: parserResult.ua,
+            browser: filterUnknown(parserResult.browser),
+            cpu: filterUnknown(parserResult.cpu),
+            device: filterUnknown(parserResult.device),
+            engine: filterUnknown(parserResult.engine),
+            os: filterUnknown(parserResult.os),
+        };
+
+        // Convert the filtered result to a readable JSON string
+        const resultString = JSON.stringify(filteredResult, null, 2);
+
+        extraInfo.innerText = resultString;
+
+        return parserResult;
+    } catch (error) {
+        console.error('Error parsing user agent:', error);
+    }
+}
+
+// ####################################################
+// ENTER YOUR NAME | Enable/Disable AUDIO/VIDEO
+// ####################################################
+
+async function whoAreYou() {
+    console.log('04 ----> Who are you?');
+
+    // Initialize video loading state
+    isInitVideoLoaded = !isVideoAllowed;
+
+    document.body.style.background = 'var(--body-bg)';
+
+    try {
+        const response = await axios.get('/config', {
+            timeout: 5000,
+        });
+        const serverButtons = response.data.message;
+        if (serverButtons) {
+            // Merge serverButtons into BUTTONS, keeping the existing keys in BUTTONS if they are not present in serverButtons
+            BUTTONS = mergeConfig(BUTTONS, serverButtons);
+
+            console.log('04 ----> AXIOS ROOM BUTTONS SETTINGS', {
+                serverButtons: serverButtons,
+                clientButtons: BUTTONS,
+            });
+        }
+    } catch (error) {
+        console.error('04 ----> AXIOS GET CONFIG ERROR', error.message);
+    }
+
+    if (navigator.getDisplayMedia || navigator.mediaDevices.getDisplayMedia) {
+        BUTTONS.main.startScreenButton && show(initStartScreenButton);
+    }
+
+    // Virtual Background if supported (Chrome/Edge/Opera/Vivaldi/...)
+    if (
+        isMediaStreamTrackAndTransformerSupported &&
+        (BUTTONS.settings.virtualBackground !== undefined ? BUTTONS.settings.virtualBackground : true)
+    ) {
+        show(initVirtualBackgroundButton);
+        show(videoVirtualBackground);
+    }
+
+    if (peer_name) {
+        hide(loadingDiv);
+        checkMedia();
+        getPeerInfo();
+        joinRoom(peer_name, room_id);
+        return;
+    }
+
+    let default_name = window.localStorage.peer_name ? window.localStorage.peer_name : '';
+    if (getCookie(room_id + '_name')) {
+        default_name = getCookie(room_id + '_name');
+    }
+
+    if (!BUTTONS.main.startVideoButton) {
+        isVideoAllowed = false;
+        isInitVideoLoaded = true;
+        elemDisplay('initVideo', false);
+        elemDisplay('initVideoButton', false);
+        elemDisplay('initAudioVideoButton', false);
+        elemDisplay('initVideoAudioRefreshButton', false);
+        elemDisplay('initVideoSelect', false);
+        elemDisplay('tabVideoDevicesBtn', false);
+        initVideoContainerShow(false);
+    }
+    if (!BUTTONS.main.startAudioButton) {
+        isAudioAllowed = false;
+        elemDisplay('initAudioButton', false);
+        elemDisplay('initAudioVideoButton', false);
+        elemDisplay('initVideoAudioRefreshButton', false);
+        elemDisplay('initMicrophoneSelect', false);
+        elemDisplay('initSpeakerSelect', false);
+        elemDisplay('tabAudioDevicesBtn', false);
+    }
+    if (!BUTTONS.main.startScreenButton) {
+        hide(initStartScreenButton);
+    }
+
+    // Fetch the OIDC profile and manage peer_name
+    let force_peer_name = false;
+
+    try {
+        // Prepare headers for profile request
+        const headers = {};
+        if (peer_token) {
+            headers.Authorization = `Bearer ${peer_token}`;
+        }
+
+        const { data: profile } = await axios.get('/profile', {
+            timeout: 5000,
+            headers: headers,
+        });
+
+        if (profile) {
+            console.log('AXIOS GET OIDC Profile retrieved successfully', profile);
+
+            // Define peer_name based on the profile properties and preferences
+            const peerNamePreference = profile.peer_name || {};
+            default_name =
+                (peerNamePreference.email && profile.email) ||
+                (peerNamePreference.name && profile.name) ||
+                default_name;
+
+            // Set localStorage and force_peer_name if applicable
+            if (default_name && peerNamePreference.force) {
+                window.localStorage.peer_name = default_name;
+                force_peer_name = true;
+            }
+        } else {
+            console.warn('AXIOS GET Profile data is empty or undefined');
+        }
+    } catch (error) {
+        console.error('AXIOS OIDC Error fetching profile', error.message || error);
+    }
+
+    Swal.fire({
+        allowOutsideClick: false,
+        allowEscapeKey: false,
+        background: swalBackground,
+        title: BRAND.app?.name,
+        input: 'text',
+        inputPlaceholder: 'Enter your email or name',
+        inputAttributes: { maxlength: 254, id: 'usernameInput' },
+        inputValue: default_name,
+        html: initUser, // Inject HTML
+        confirmButtonText: `Войти`,
+        customClass: { popup: 'init-modal-size' },
+        showClass: { popup: 'animate__animated animate__fadeInDown' },
+        hideClass: { popup: 'animate__animated animate__fadeOutUp' },
+        willOpen: () => {
+            hide(loadingDiv);
+        },
+        inputValidator: (name) => {
+            if (isVideoAllowed && !isInitVideoLoaded) {
+                return 'Please wait for video to initialize...';
+            }
+            if (!name) return 'Please enter your email or name';
+            const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(name);
+            if ((isEmail && name.length > 254) || (!isEmail && name.length > 32)) {
+                return isEmail ? 'Email must be max 254 char' : 'Name must be max 32 char';
+            }
+            name = filterXSS(name);
+            if (isHtml(name)) return 'Invalid name!';
+            if (!getCookie(room_id + '_name')) {
+                window.localStorage.peer_name = name;
+            }
+            setCookie(room_id + '_name', name, 30);
+            peer_name = name;
+
+            if (isValidEmail(peer_name)) {
+                getId('notifyEmailInput').value = peer_name;
+            }
+        },
+    }).then(async () => {
+        if (!usernameEmoji.classList.contains('hidden')) {
+            usernameEmoji.classList.add('hidden');
+        }
+        if (initStream && !joinRoomWithScreen) {
+            await stopTracks(initStream);
+            elemDisplay('initVideo', false);
+            initVideoContainerShow(false);
+        }
+        getPeerInfo();
+        joinRoom(peer_name, room_id);
+    });
+
+    // Show the init user container injected in Swal
+    initUser.classList.toggle('hidden');
+
+    if (force_peer_name) {
+        getId('usernameInput').disabled = true;
+        hide(initUsernameEmojiButton);
+    }
+
+    if (!isVideoAllowed) {
+        elemDisplay('initVideo', false);
+        initVideoContainerShow(false);
+        hide(initVideoSelect);
+    }
+    if (!isAudioAllowed) {
+        hide(initMicrophoneSelect);
+        hide(initSpeakerSelect);
+    }
+}
+
+function mergeConfig(current, updated) {
+    for (const key of Object.keys(updated)) {
+        if (!current.hasOwnProperty(key) || typeof updated[key] !== 'object') {
+            current[key] = updated[key];
+        } else {
+            mergeConfig(current[key], updated[key]);
+        }
+    }
+    return current;
+}
+
+function handleAudio() {
+    isAudioAllowed = isAudioAllowed ? false : true;
+    initAudioButton.className = 'fas fa-microphone' + (isAudioAllowed ? '' : '-slash');
+    setColor(initAudioButton, isAudioAllowed ? 'white' : 'red');
+    setColor(startAudioButton, isAudioAllowed ? 'white' : 'red');
+    checkInitAudio(isAudioAllowed);
+    lS.setInitConfig(lS.MEDIA_TYPE.audio, isAudioAllowed);
+}
+
+function handleVideo() {
+    isVideoAllowed = isVideoAllowed ? false : true;
+    initVideoButton.className = 'fas fa-video' + (isVideoAllowed ? '' : '-slash');
+    setColor(initVideoButton, isVideoAllowed ? 'white' : 'red');
+    setColor(startVideoButton, isVideoAllowed ? 'white' : 'red');
+    checkInitVideo(isVideoAllowed);
+    lS.setInitConfig(lS.MEDIA_TYPE.video, isVideoAllowed);
+
+    elemDisplay('imageGrid', false);
+
+    isVideoAllowed &&
+    isMediaStreamTrackAndTransformerSupported &&
+    (BUTTONS.settings.virtualBackground !== undefined ? BUTTONS.settings.virtualBackground : true)
+        ? show(initVirtualBackgroundButton)
+        : hide(initVirtualBackgroundButton);
+}
+
+async function handleAudioVideo() {
+    isAudioVideoAllowed = isAudioVideoAllowed ? false : true;
+    isAudioAllowed = isAudioVideoAllowed;
+    isVideoAllowed = isAudioVideoAllowed;
+    lS.setInitConfig(lS.MEDIA_TYPE.audio, isAudioVideoAllowed);
+    lS.setInitConfig(lS.MEDIA_TYPE.video, isAudioVideoAllowed);
+    lS.setInitConfig(lS.MEDIA_TYPE.audioVideo, isAudioVideoAllowed);
+    initAudioButton.className = 'fas fa-microphone' + (isAudioVideoAllowed ? '' : '-slash');
+    initVideoButton.className = 'fas fa-video' + (isAudioVideoAllowed ? '' : '-slash');
+    initAudioVideoButton.className = 'fas fa-eye' + (isAudioVideoAllowed ? '' : '-slash');
+    if (!isAudioVideoAllowed) {
+        hide(initAudioButton);
+        hide(initVideoButton);
+        hide(initVideoAudioRefreshButton);
+    }
+    if (isAudioAllowed && isVideoAllowed && !isMobileDevice) show(initVideoAudioRefreshButton);
+    setColor(initAudioVideoButton, isAudioVideoAllowed ? 'white' : 'red');
+    setColor(initAudioButton, isAudioAllowed ? 'white' : 'red');
+    setColor(initVideoButton, isVideoAllowed ? 'white' : 'red');
+    setColor(startAudioButton, isAudioAllowed ? 'white' : 'red');
+    setColor(startVideoButton, isVideoAllowed ? 'white' : 'red');
+    await checkInitVideo(isVideoAllowed);
+    checkInitAudio(isAudioAllowed);
+
+    elemDisplay('imageGrid', false);
+
+    isVideoAllowed &&
+    isMediaStreamTrackAndTransformerSupported &&
+    (BUTTONS.settings.virtualBackground !== undefined ? BUTTONS.settings.virtualBackground : true)
+        ? show(initVirtualBackgroundButton)
+        : hide(initVirtualBackgroundButton);
+}
+
+async function checkInitVideo(isVideoAllowed) {
+    if (isVideoAllowed && BUTTONS.main.startVideoButton) {
+        if (initVideoSelect.value) {
+            initVideoContainerShow();
+            await changeCamera(initVideoSelect.value);
+            isInitVideoLoaded = true;
+        }
+        sound('joined');
+    } else {
+        if (initStream) {
+            stopTracks(initStream);
+            elemDisplay('initVideo', false);
+            initVideoContainerShow(false);
+            sound('left');
+        }
+        isInitVideoLoaded = !isVideoAllowed;
+    }
+    initVideoSelect.disabled = !isVideoAllowed;
+}
+
+function checkInitAudio(isAudioAllowed) {
+    initMicrophoneSelect.disabled = !isAudioAllowed;
+    initSpeakerSelect.disabled = !isAudioAllowed;
+    isAudioAllowed ? sound('joined') : sound('left');
+}
+
+function initVideoContainerShow(show = true) {
+    initVideoContainerClass.style.width = show ? '100%' : 'auto';
+    initVideoContainerClass.style.padding = show ? '10px' : '0px';
+}
+
+function checkMedia() {
+    let audio = getQueryParam('audio');
+    let video = getQueryParam('video');
+    if (audio) {
+        audio = audio.toLowerCase();
+        let queryPeerAudio = audio === '1' || audio === 'true';
+        if (queryPeerAudio != null) isAudioAllowed = queryPeerAudio;
+    }
+    if (video) {
+        video = video.toLowerCase();
+        let queryPeerVideo = video === '1' || video === 'true';
+        if (queryPeerVideo != null) isVideoAllowed = queryPeerVideo;
+    }
+    // elemDisplay('tabVideoDevicesBtn', isVideoAllowed);
+    // elemDisplay('tabAudioDevicesBtn', isAudioAllowed);
+
+    console.log('Direct join', {
+        audio: isAudioAllowed,
+        video: isVideoAllowed,
+    });
+}
+
+// ####################################################
+// SHARE ROOM
+// ####################################################
+
+async function shareRoom(useNavigator = false) {
+    if (navigator.share && useNavigator) {
+        try {
+            await navigator.share({ url: RoomURL });
+            userLog('info', 'Room Shared successfully', 'top-end');
+        } catch (err) {
+            share();
+        }
+    } else {
+        share();
+    }
+    function share() {
+        sound('open');
+
+        Swal.fire({
+            background: swalBackground,
+            position: 'center',
+            title: 'Поделиться комнатой',
+            html: `
+            <div id="qrRoomContainer">
+                <canvas id="qrRoom"></canvas>
+            </div>
+            <br/>
+            <p style="background:transparent; color:rgb(8, 189, 89);">Присеодениться с мобильного</p>
+            <p style="background:transparent; color:white; font-family: Arial, Helvetica, sans-serif;">Наведите камеру на qr код для подключения к конференции.</p>
+            <p style="background:transparent; color:rgb(8, 189, 89);">${RoomURL}</p>`,
+            showDenyButton: true,
+            showCancelButton: true,
+            cancelButtonColor: 'red',
+            denyButtonColor: 'green',
+            confirmButtonText: `Копировать URL`,
+            denyButtonText: `Email invite`,
+            cancelButtonText: `Закрыть`,
+            showClass: { popup: 'animate__animated animate__fadeInDown' },
+            hideClass: { popup: 'animate__animated animate__fadeOutUp' },
+        }).then((result) => {
+            if (result.isConfirmed) {
+                copyRoomURL();
+            } else if (result.isDenied) {
+                shareRoomByEmail();
+            }
+            // share screen on join
+            if (isScreenAllowed) {
+                rc.shareScreen();
+            }
+        });
+        makeRoomQR();
+    }
+}
+
+// ####################################################
+// ROOM UTILITY
+// ####################################################
+
+function makeRoomQR() {
+    const qr = new QRious({
+        element: document.getElementById('qrRoom'),
+        value: RoomURL,
+    });
+    qr.set({
+        size: 256,
+    });
+}
+
+function makeRoomPopupQR() {
+    const qr = new QRious({
+        element: document.getElementById('qrRoomPopup'),
+        value: RoomURL,
+    });
+    qr.set({
+        size: 256,
+    });
+}
+
+function copyRoomURL() {
+    let tmpInput = document.createElement('input');
+    document.body.appendChild(tmpInput);
+    tmpInput.value = RoomURL;
+    tmpInput.select();
+    tmpInput.setSelectionRange(0, 99999); // For mobile devices
+    navigator.clipboard.writeText(tmpInput.value);
+    document.body.removeChild(tmpInput);
+    userLog('info', 'Meeting URL copied to clipboard 👍', 'top-end');
+}
+
+function copyToClipboard(txt, showTxt = true) {
+    let tmpInput = document.createElement('input');
+    document.body.appendChild(tmpInput);
+    tmpInput.value = txt;
+    tmpInput.select();
+    tmpInput.setSelectionRange(0, 99999); // For mobile devices
+    navigator.clipboard.writeText(tmpInput.value);
+    document.body.removeChild(tmpInput);
+    showTxt
+        ? userLog('info', `${txt} copied to clipboard 👍`, 'top-end')
+        : userLog('info', `Copied to clipboard 👍`, 'top-end');
+}
+
+function shareRoomByEmail() {
+    Swal.fire({
+        allowOutsideClick: false,
+        allowEscapeKey: false,
+        background: swalBackground,
+        imageUrl: image.email,
+        position: 'center',
+        title: 'Select a Date and Time',
+        html: '<input type="text" id="datetimePicker" class="flatpickr" />',
+        showCancelButton: true,
+        confirmButtonText: 'OK',
+        cancelButtonColor: 'red',
+        showClass: { popup: 'animate__animated animate__fadeInDown' },
+        hideClass: { popup: 'animate__animated animate__fadeOutUp' },
+        preConfirm: () => {
+            const newLine = '%0D%0A%0D%0A';
+            const selectedDateTime = document.getElementById('datetimePicker').value;
+            const roomPassword =
+                isRoomLocked && (room_password || rc.RoomPassword)
+                    ? 'Password: ' + (room_password || rc.RoomPassword) + newLine
+                    : '';
+            const email = '';
+            const emailSubject = `Please join our ${BRAND.app.name} Video Chat Meeting`;
+            const emailBody = `The meeting is scheduled at: ${newLine} DateTime: ${selectedDateTime} ${newLine}${roomPassword}Click to join: ${RoomURL} ${newLine}`;
+            document.location = 'mailto:' + email + '?subject=' + emailSubject + '&body=' + emailBody;
+        },
+    });
+    flatpickr('#datetimePicker', {
+        enableTime: true,
+        dateFormat: 'Y-m-d H:i',
+        time_24hr: true,
+    });
+}
+
+// ####################################################
+// JOIN ROOM
+// ####################################################
+
+function joinRoom(peer_name, room_id) {
+    if (rc && rc.isConnected()) {
+        console.log('Already connected to a room');
+    } else {
+        console.log('05 ----> join Room ' + room_id);
+        roomId.innerText = room_id;
+        userName.innerText = peer_name;
+        isUserPresenter.innerText = isPresenter;
+        isAudioAllowed = false;
+        isVideoAllowed = false;
+        rc = new RoomClient(
+            localAudio,
+            remoteAudios,
+            videoMediaContainer,
+            videoPinMediaContainer,
+            window.mediasoupClient,
+            socket,
+            room_id,
+            peer_name,
+            peer_uuid,
+            peer_info,
+            isAudioAllowed,
+            isVideoAllowed,
+            isScreenAllowed,
+            joinRoomWithScreen,
+            isSpeechSynthesisSupported,
+            transcription,
+            roomIsReady
+        );
+        handleRoomClientEvents();
+    }
+}
+
+function roomIsReady() {
+    startRoomSession();
+
+    makeRoomPopupQR();
+
+    if (peer_avatar && isImageURL(peer_avatar)) {
+        myProfileAvatar.setAttribute('src', peer_avatar);
+    } else if (rc.isValidEmail(peer_name)) {
+        myProfileAvatar.style.borderRadius = `50px`;
+        myProfileAvatar.setAttribute('src', rc.genGravatar(peer_name));
+    } else {
+        myProfileAvatar.setAttribute('src', rc.genAvatarSvg(peer_name, 64));
+    }
+
+    const controlDiv = getId('control');
+    if (controlDiv) {
+        const visibleButtons = Array.from(controlDiv.children).filter(
+            (el) => el.offsetParent !== null && !el.classList.contains('hidden')
+        );
+        BUTTONS.main.extraButton || visibleButtons.length > 0 ? show(toggleExtraButton) : hide(toggleExtraButton);
+    } else {
+        show(toggleExtraButton);
+    }
+
+    BUTTONS.main.exitButton && show(exitButton);
+    BUTTONS.main.shareButton && show(shareButton);
+    BUTTONS.main.hideMeButton && show(hideMeButton);
+    if (BUTTONS.settings.tabRecording) {
+        show(startRecButton);
+    } else {
+        hide(startRecButton);
+        hide(tabRecordingBtn);
+    }
+    BUTTONS.main.chatButton && show(chatButton);
+    BUTTONS.main.participantsButton && show(participantsButton);
+    BUTTONS.main.pollButton && show(pollButton);
+    BUTTONS.main.editorButton && show(editorButton);
+    BUTTONS.main.raiseHandButton && show(raiseHandButton);
+    BUTTONS.main.emojiRoomButton && show(emojiRoomButton);
+    !BUTTONS.chat.chatSaveButton && hide(chatSaveButton);
+    BUTTONS.chat.chatEmojiButton && show(chatEmojiButton);
+    BUTTONS.chat.chatMarkdownButton && show(chatMarkdownButton);
+
+    !BUTTONS.poll.pollSaveButton && hide(pollSaveButton);
+
+    speechRecognition && BUTTONS.chat.chatSpeechStartButton
+        ? show(chatSpeechStartButton)
+        : (BUTTONS.chat.chatSpeechStartButton = false);
+
+    transcription.isSupported() && BUTTONS.main.transcriptionButton
+        ? show(transcriptionButton)
+        : (BUTTONS.main.transcriptionButton = false);
+
+    show(chatCleanTextButton);
+    show(chatPasteButton);
+    show(chatSendButton);
+    if (isDesktopDevice) {
+        show(whiteboardGridBtn);
+    }
+    if (isMobileDevice) {
+        hide(initVideoAudioRefreshButton);
+        hide(refreshVideoDevices);
+        hide(refreshAudioDevices);
+        BUTTONS.main.swapCameraButton && show(swapCameraButton);
+        rc.chatMaximize();
+        hide(chatTogglePin);
+        hide(chatMaxButton);
+        hide(chatMinButton);
+        rc.pollMaximize();
+        hide(pollTogglePin);
+        hide(editorTogglePin);
+        hide(pollMaxButton);
+        hide(pollMinButton);
+        transcription.maximize();
+        hide(transcriptionTogglePinBtn);
+        hide(transcriptionMaxBtn);
+        hide(transcriptionMinBtn);
+    } else {
+        //rc.makeDraggable(emojiPickerContainer, emojiPickerHeader);
+        rc.makeDraggable(chatRoom, chatHeader);
+        rc.makeDraggable(pollRoom, pollHeader);
+        //rc.makeDraggable(editorRoom, editorHeader);
+        rc.makeDraggable(mySettings, mySettingsHeader);
+        rc.makeDraggable(whiteboard, whiteboardHeader);
+        rc.makeDraggable(sendFileDiv, imgShareSend);
+        rc.makeDraggable(receiveFileDiv, imgShareReceive);
+        rc.makeDraggable(lobby, lobbyHeader);
+        rc.makeDraggable(transcriptionRoom, transcriptionHeader);
+        if (navigator.getDisplayMedia || navigator.mediaDevices.getDisplayMedia) {
+            if (BUTTONS.main.startScreenButton) {
+                show(startScreenButton);
+                show(ScreenQualityDiv);
+                show(ScreenFpsDiv);
+            }
+            BUTTONS.main.snapshotRoomButton && show(snapshotRoomButton);
+        }
+        BUTTONS.chat.chatPinButton && show(chatTogglePin);
+        BUTTONS.chat.chatMaxButton && show(chatMaxButton);
+        BUTTONS.poll.pollPinButton && show(pollTogglePin);
+        show(editorTogglePin);
+        BUTTONS.poll.pollMaxButton && show(pollMaxButton);
+        BUTTONS.settings.pushToTalk && show(pushToTalkDiv);
+        BUTTONS.settings.tabRTMPStreamingBtn &&
+            show(tabRTMPStreamingBtn) &&
+            show(startRtmpButton) &&
+            show(startRtmpURLButton) &&
+            show(streamerRtmpButton);
+    }
+    if (BUTTONS.main.fullScreenButton && !parserResult.browser.name.toLowerCase().includes('safari')) {
+        document.onfullscreenchange = () => {
+            if (!document.fullscreenElement) rc.isDocumentOnFullScreen = false;
+        };
+        show(fullScreenButton);
+    } else {
+        hide(fullScreenButton);
+    }
+    BUTTONS.main.whiteboardButton && show(whiteboardButton);
+    if (BUTTONS.main.documentPiPButton && showDocumentPipBtn) show(documentPiPButton);
+    BUTTONS.main.settingsButton && show(settingsButton);
+    isAudioAllowed ? show(stopAudioButton) : BUTTONS.main.startAudioButton && show(startAudioButton);
+    isVideoAllowed ? show(stopVideoButton) : BUTTONS.main.startVideoButton && show(startVideoButton);
+    BUTTONS.settings.activeRooms && show(activeRoomsButton);
+    BUTTONS.settings.fileSharing && show(fileShareButton);
+    BUTTONS.settings.lockRoomButton && show(lockRoomButton);
+    BUTTONS.settings.broadcastingButton && show(broadcastingButton);
+    BUTTONS.settings.lobbyButton && show(lobbyButton);
+    BUTTONS.settings.sendEmailInvitation && show(sendEmailInvitation);
+    !BUTTONS.settings.customNoiseSuppression && hide(noiseSuppressionButton);
+    if (BUTTONS.settings.tabNotificationsBtn && tabNotificationsBtn) show(tabNotificationsBtn);
+    if (rc.recording.recSyncServerRecording) show(roomRecordingServer);
+    BUTTONS.main.aboutButton && show(aboutButton);
+    if (!isMobileDevice) show(pinUnpinGridDiv);
+    if (!isSpeechSynthesisSupported) hide(speechMsgDiv);
+    if (
+        isMediaStreamTrackAndTransformerSupported &&
+        (BUTTONS.settings.virtualBackground !== undefined ? BUTTONS.settings.virtualBackground : true)
+    ) {
+        rc.showVideoImageSelector();
+    }
+    handleButtons();
+    handleSelects();
+    handleInputs();
+    handleChatEmojiPicker();
+    handleRoomEmojiPicker();
+    handleEditor();
+    loadSettingsFromLocalStorage();
+    startSessionTimer();
+    handleButtonsBar();
+    enforceCompactToolbar();
+    handleDropdownHover();
+    checkButtonsBar();
+    if (room_password) {
+        lockRoomButton.click();
+    }
+    //show(restartICEButton); // TEST
+}
+
+// ####################################################
+// UTILS
+// ####################################################
+
+function updateChatEmptyNotice() {
+    const chatLists = [
+        getId('chatGPTMessages'),
+        getId('deepSeekMessages'),
+        getId('chatPublicMessages'),
+        getId('chatPrivateMessages'),
+    ].filter(Boolean);
+    const emptyNotice = getId('chatEmptyNotice');
+    if (!emptyNotice) return;
+    const hasMessages = chatLists.some((ul) => ul.children.length > 0);
+    hasMessages ? emptyNotice.classList.add('hidden') : emptyNotice.classList.remove('hidden');
+}
+
+function elemDisplay(elem, display, mode = 'block') {
+    elem = getId(elem);
+    if (!elem) {
+        elementNotFound(elem);
+        return;
+    }
+    elem.style.display = display ? mode : 'none';
+}
+
+function hide(elem) {
+    elem = typeof elem === 'string' ? getId(elem) : elem;
+    if (!elem || !elem.classList) {
+        elementNotFound(elem);
+        return;
+    }
+    if (!elem.classList.contains('hidden')) elem.classList.toggle('hidden');
+}
+
+function show(elem) {
+    elem = typeof elem === 'string' ? getId(elem) : elem;
+    if (!elem || !elem.classList) {
+        elementNotFound(elem);
+        return;
+    }
+    if (elem.classList.contains('hidden')) elem.classList.toggle('hidden');
+}
+
+function disable(elem, disabled) {
+    elem = typeof elem === 'string' ? getId(elem) : elem;
+    if (!elem) {
+        elementNotFound(elem);
+        return;
+    }
+    elem.disabled = disabled;
+}
+
+function setColor(elem, color) {
+    elem = typeof elem === 'string' ? getId(elem) : elem;
+    if (!elem) {
+        elementNotFound(elem);
+        return;
+    }
+    elem.style.color = color;
+}
+
+function getColor(elem) {
+    elem = typeof elem === 'string' ? getId(elem) : elem;
+    if (!elem) {
+        elementNotFound(elem);
+        return undefined;
+    }
+    return elem.style.color;
+}
+
+function elementNotFound(element) {
+    console.error('Element Not Found', element);
+    return false;
+}
+
+// ####################################################
+// SESSION TIMER
+// ####################################################
+
+function startSessionTimer() {
+    sessionTime.style.display = 'inline';
+    let callStartTime = Date.now();
+    setInterval(function printTime() {
+        let callElapsedTime = Date.now() - callStartTime;
+        sessionTime.innerText = getTimeToString(callElapsedTime);
+    }, 1000);
+}
+
+function getTimeToString(time) {
+    let diffInHrs = time / 3600000;
+    let hh = Math.floor(diffInHrs);
+    let diffInMin = (diffInHrs - hh) * 60;
+    let mm = Math.floor(diffInMin);
+    let diffInSec = (diffInMin - mm) * 60;
+    let ss = Math.floor(diffInSec);
+    let formattedHH = hh.toString().padStart(2, '0');
+    let formattedMM = mm.toString().padStart(2, '0');
+    let formattedSS = ss.toString().padStart(2, '0');
+    return `${formattedHH}:${formattedMM}:${formattedSS}`;
+}
+
+// ####################################################
+// RECORDING TIMER
+// ####################################################
+
+function secondsToHms(d) {
+    d = Number(d);
+    let h = Math.floor(d / 3600);
+    let m = Math.floor((d % 3600) / 60);
+    let s = Math.floor((d % 3600) % 60);
+    let hDisplay = h > 0 ? h + 'h' : '';
+    let mDisplay = m > 0 ? m + 'm' : '';
+    let sDisplay = s > 0 ? s + 's' : '';
+    return hDisplay + ' ' + mDisplay + ' ' + sDisplay;
+}
+
+function startRecordingTimer() {
+    recElapsedTime = 0;
+    recTimer = setInterval(function printTime() {
+        if (rc.isRecording()) {
+            recElapsedTime++;
+            recordingStatus.innerText = secondsToHms(recElapsedTime);
+        }
+    }, 1000);
+}
+function stopRecordingTimer() {
+    clearInterval(recTimer);
+    recordingStatus.innerText = '0s';
+}
+
+// ####################################################
+// HTML BUTTONS
+// ####################################################
+
+function ensureControlElements() {
+    if (control && bottomButtons && toggleExtraButton) return true;
+
+    console.warn('Control bar elements are missing in the DOM.');
+    return false;
+}
+
+function bindClick(id, handler) {
+    const el = document.getElementById(id);
+    if (!el) return null;
+    el.addEventListener('click', handler);
+    return el;
+}
+
+function handleButtons() {
+    if (buttonsHandlersInitialized) return;
+    buttonsHandlersInitialized = true;
+
+    if (!ensureControlElements()) return;
+
+    const ensureRoomClient = (action) => {
+        if (rc) return true;
+        console.warn(`Room client not ready for action: ${action}`);
+        userLog('warning', 'Room is still initializing, please try again.', 'top-end', 4000);
+        return false;
+    };
+
+    // Lobby...
+    bindClick('lobbyUsers', function (event) {
+        switch (event.target.id) {
+            case 'lobbyAcceptAllBtn':
+                rc.lobbyAcceptAll();
+                break;
+            case 'lobbyRejectAllBtn':
+                rc.lobbyRejectAll();
+                break;
+            default:
+                break;
+        }
+    });
+    control.onmouseover = () => {
+        isButtonsBarOver = true;
+    };
+    control.onmouseout = () => {
+        isButtonsBarOver = false;
+    };
+    bottomButtons.onmouseover = () => {
+        isButtonsBarOver = true;
+    };
+    bottomButtons.onmouseout = () => {
+        isButtonsBarOver = false;
+    };
+    bindClick('exitButton', () => {
+        leaveRoom();
+    });
+    const shareButton = bindClick('shareButton', () => {
+        shareRoom(true);
+    });
+    if (shareButton) {
+        shareButton.onmouseenter = () => {
+            if (isMobileDevice || !BUTTONS.popup.shareRoomQrOnHover) return;
+            show(qrRoomPopupContainer);
+        };
+        shareButton.onmouseleave = () => {
+            if (isMobileDevice || !BUTTONS.popup.shareRoomQrOnHover) return;
+            hide(qrRoomPopupContainer);
+        };
+    }
+    bindClick('hideMeButton', (e) => {
+        if (isHideALLVideosActive) {
+            return userLog('warning', 'To use this feature, please toggle video focus mode', 'top-end', 6000);
+        }
+        isHideMeActive = !isHideMeActive;
+        rc.handleHideMe();
+        hideClassElements('videoMenuBar');
+    });
+    bindClick('settingsButton', () => {
+        rc.toggleMySettings();
+    });
+    bindClick('mySettingsCloseBtn', () => {
+        rc.toggleMySettings();
+    });
+    bindClick('tabVideoDevicesBtn', (e) => {
+        rc.openTab(e, 'tabVideoDevices');
+    });
+    bindClick('tabAudioDevicesBtn', (e) => {
+        rc.openTab(e, 'tabAudioDevices');
+    });
+    bindClick('tabRecordingBtn', (e) => {
+        rc.openTab(e, 'tabRecording');
+    });
+    bindClick('tabRoomBtn', (e) => {
+        rc.openTab(e, 'tabRoom');
+    });
+    bindClick('tabVideoShareBtn', (e) => {
+        rc.openTab(e, 'tabVideoShare');
+    });
+    bindClick('tabRTMPStreamingBtn', (e) => {
+        rc.getRTMP();
+        rc.openTab(e, 'tabRTMPStreaming');
+    });
+    bindClick('refreshVideoFiles', () => {
+        rc.getRTMP();
+        userLog('info', 'Refreshed video files', 'top-end');
+    });
+    bindClick('tabAspectBtn', (e) => {
+        rc.openTab(e, 'tabAspect');
+    });
+    bindClick('tabNotificationsBtn', (e) => {
+        rc.openTab(e, 'tabNotifications');
+    });
+    bindClick('tabModeratorBtn', (e) => {
+        rc.openTab(e, 'tabModerator');
+    });
+    bindClick('tabProfileBtn', (e) => {
+        rc.openTab(e, 'tabProfile');
+    });
+    bindClick('tabShortcutsBtn', (e) => {
+        rc.openTab(e, 'tabShortcuts');
+    });
+    bindClick('tabStylingBtn', (e) => {
+        rc.openTab(e, 'tabStyling');
+    });
+    bindClick('tabLanguagesBtn', (e) => {
+        rc.openTab(e, 'tabLanguages');
+    });
+    bindClick('notifyEmailCleanBtn', () => {
+        rc.cleanNotifications();
+        rc.saveNotifications(false);
+    });
+    bindClick('notifyAdminCleanBtn', () => {
+        rc.cleanNotifications();
+        rc.saveNotifications(false);
+    });
+    bindClick('saveNotificationsBtn', () => {
+        rc.saveNotifications();
+    });
+    bindClick('tabVideoAIBtn', (e) => {
+        rc.openTab(e, 'tabVideoAI');
+        rc.getAvatarList();
+        rc.getVoiceList();
+    });
+    bindClick('avatarVideoAIStart', (e) => {
+        rc.stopSession();
+        rc.handleVideoAI();
+        rc.toggleMySettings();
+    });
+    const switchAvatars = document.getElementById('switchAvatars');
+    if (switchAvatars) {
+        switchAvatars.onchange = (e) => {
+            showFreeAvatars = e.currentTarget.checked;
+            rc.getAvatarList();
+        };
+    }
+    const avatarQuality = document.getElementById('avatarQuality');
+    if (avatarQuality) {
+        avatarQuality.selectedIndex = 1;
+        avatarQuality.onchange = (e) => {
+            VideoAI.quality = e.target.value;
+        };
+    }
+    bindClick('refreshVideoDevices', async () => {
+        await refreshMyVideoDevices();
+        userLog('info', 'Refreshed video devices', 'top-end');
+    });
+    bindClick('refreshAudioDevices', async () => {
+        await refreshMyAudioDevices();
+        userLog('info', 'Refreshed audio devices', 'top-end');
+    });
+    bindClick('speakerTestBtn', () => {
+        sound('ring', true);
+    });
+    bindClick('roomId', () => {
+        isMobileDevice ? shareRoom(true) : copyRoomURL();
+    });
+    bindClick('roomSendEmail', () => {
+        shareRoomByEmail();
+    });
+    bindClick('chatButton', () => {
+        rc.toggleChat();
+    });
+    bindClick('participantsButton', async () => {
+        rc.toggleParticipants();
+    });
+    // Polls
+    bindClick('pollButton', () => {
+        rc.togglePoll();
+    });
+    bindClick('pollMaxButton', () => {
+        rc.pollMaximize();
+    });
+    bindClick('pollMinButton', () => {
+        rc.pollMinimize();
+    });
+    bindClick('pollCloseBtn', () => {
+        rc.togglePoll();
+    });
+    bindClick('pollTogglePin', () => {
+        rc.togglePollPin();
+    });
+    bindClick('pollSaveButton', () => {
+        rc.pollSaveResults();
+    });
+    bindClick('pollAddOptionBtn', () => {
+        rc.pollAddOptions();
+    });
+    bindClick('pollDelOptionBtn', () => {
+        rc.pollDeleteOptions();
+    });
+    const pollCreateForm = document.getElementById('pollCreateForm');
+    if (pollCreateForm) {
+        pollCreateForm.onsubmit = (e) => {
+            rc.pollCreateNewForm(e);
+        };
+    }
+    bindClick('editorButton', () => {
+        rc.toggleEditor();
+        if (isPresenter && !rc.editorIsLocked()) {
+            rc.editorSendAction('open');
+        }
+    });
+    bindClick('editorCloseBtn', () => {
+        rc.toggleEditor();
+        if (isPresenter && !rc.editorIsLocked()) {
+            rc.editorSendAction('close');
+        }
+    });
+    bindClick('editorTogglePin', () => {
+        rc.toggleEditorPin();
+    });
+    bindClick('editorLockBtn', () => {
+        rc.toggleLockUnlockEditor();
+    });
+    bindClick('editorUnlockBtn', () => {
+        rc.toggleLockUnlockEditor();
+    });
+    bindClick('editorCleanBtn', () => {
+        rc.editorClean();
+    });
+    bindClick('editorCopyBtn', () => {
+        rc.editorCopy();
+    });
+    bindClick('editorSaveBtn', () => {
+        rc.editorSave();
+    });
+    bindClick('editorUndoBtn', () => {
+        rc.editorUndo();
+    });
+    bindClick('editorRedoBtn', () => {
+        rc.editorRedo();
+    });
+    bindClick('transcriptionButton', () => {
+        transcription.toggle();
+    });
+    bindClick('transcriptionCloseBtn', () => {
+        transcription.toggle();
+    });
+    bindClick('transcriptionTogglePinBtn', () => {
+        transcription.togglePinUnpin();
+    });
+    bindClick('transcriptionMaxBtn', () => {
+        transcription.maximize();
+    });
+    bindClick('transcriptionMinBtn', () => {
+        transcription.minimize();
+    });
+    bindClick('transcriptionAllBtn', () => {
+        transcription.startAll();
+    });
+    bindClick('transcriptionGhostBtn', () => {
+        transcription.toggleBg();
+    });
+    bindClick('transcriptionSaveBtn', () => {
+        transcription.save();
+    });
+    bindClick('transcriptionCleanBtn', () => {
+        transcription.delete();
+    });
+    bindClick('chatHideParticipantsList', (e) => {
+        rc.toggleShowParticipants();
+    });
+    bindClick('chatShowParticipantsList', (e) => {
+        rc.toggleShowParticipants();
+    });
+    bindClick('chatShareRoomBtn', (e) => {
+        shareRoom(true);
+    });
+    bindClick('chatGhostButton', (e) => {
+        rc.chatToggleBg();
+    });
+    bindClick('chatCleanButton', () => {
+        rc.chatClean();
+    });
+    bindClick('chatSaveButton', () => {
+        rc.chatSave();
+    });
+    bindClick('chatCloseButton', () => {
+        rc.toggleChat();
+    });
+    bindClick('chatTogglePin', () => {
+        rc.toggleChatPin();
+    });
+    bindClick('chatMaxButton', () => {
+        rc.chatMaximize();
+    });
+    bindClick('chatMinButton', () => {
+        rc.chatMinimize();
+    });
+    bindClick('chatCleanTextButton', () => {
+        rc.cleanMessage();
+    });
+    bindClick('chatPasteButton', () => {
+        rc.pasteMessage();
+    });
+    bindClick('chatSendButton', () => {
+        rc.sendMessage();
+    });
+    bindClick('chatEmojiButton', () => {
+        rc.toggleChatEmoji();
+    });
+    const chatMarkdownButton = document.getElementById('chatMarkdownButton');
+    if (chatMarkdownButton) {
+        chatMarkdownButton.onclick = () => {
+            isChatMarkdownOn = !isChatMarkdownOn;
+            setColor(chatMarkdownButton, isChatMarkdownOn ? 'lime' : 'white');
+        };
+    }
+    bindClick('chatSpeechStartButton', () => {
+        startSpeech();
+    });
+    bindClick('chatSpeechStopButton', () => {
+        stopSpeech();
+    });
+    bindClick('transcriptionSpeechStart', () => {
+        transcription.start();
+    });
+    bindClick('transcriptionSpeechStop', () => {
+        transcription.stop();
+    });
+    bindClick('fullScreenButton', () => {
+        rc.toggleRoomFullScreen();
+    });
+    const recordingImage = document.getElementById('recordingImage');
+    const startRecButton = bindClick('startRecButton', () => {
+        rc.startRecording();
+    });
+    const stopRecButton = bindClick('stopRecButton', () => {
+        rc.stopRecording();
+    });
+    bindClick('pauseRecButton', () => {
+        rc.pauseRecording();
+    });
+    bindClick('resumeRecButton', () => {
+        rc.resumeRecording();
+    });
+    if (recordingImage && startRecButton && stopRecButton) {
+        recordingImage.onclick = () => {
+            isRecording ? stopRecButton.click() : startRecButton.click();
+        };
+    }
+    bindClick('swapCameraButton', () => {
+        if (isHideMeActive) rc.handleHideMe();
+        rc.closeThenProduce(RoomClient.mediaType.video, null, true);
+    });
+    bindClick('raiseHandButton', () => {
+        rc.updatePeerInfo(peer_name, socket.id, 'hand', true);
+        hideClassElements('videoMenuBar');
+    });
+    bindClick('lowerHandButton', () => {
+        rc.updatePeerInfo(peer_name, socket.id, 'hand', false);
+    });
+    const extraButton = bindClick('toggleExtraButton', () => {
+        toggleExtraButtons();
+        if (!isMobileDevice) {
+            isToggleExtraBtnClicked = true;
+            setTimeout(() => {
+                isToggleExtraBtnClicked = false;
+            }, 2000);
+        }
+    });
+    if (extraButton) {
+        extraButton.onmouseover = () => {
+            if (isToggleExtraBtnClicked || isMobileDevice) return;
+            if (control && control.style.display === 'none') {
+                toggleExtraButtons();
+            }
+        };
+    }
+    bindClick('startAudioButton', async () => {
+        if (!ensureRoomClient('start audio')) return;
+
+        const moderator = rc.getModerator();
+        if (moderator.audio_cant_unmute) {
+            return userLog('warning', 'The moderator does not allow you to unmute', 'top-end', 6000);
+        }
+        if (isPushToTalkActive) return;
+        await requestMicrophone();
+    });
+    bindClick('stopAudioButton', async () => {
+        if (!ensureRoomClient('stop audio')) return;
+        if (isPushToTalkActive) return;
+        setAudioButtonsDisabled(true);
+
+        const producerExist = rc.producerExist(RoomClient.mediaType.audio);
+        console.log('STOP AUDIO producerExist --->', producerExist);
+
+        producerExist
+            ? await rc.pauseProducer(RoomClient.mediaType.audio)
+            : await rc.closeProducer(RoomClient.mediaType.audio);
+
+        rc.updatePeerInfo(peer_name, socket.id, 'audio', false);
+    });
+    bindClick('startVideoButton', async () => {
+        if (!ensureRoomClient('start video')) return;
+
+        const moderator = rc.getModerator();
+        if (moderator.video_cant_unhide) {
+            return userLog('warning', 'The moderator does not allow you to unhide', 'top-end', 6000);
+        }
+        await requestCamera();
+        // await rc.resumeProducer(RoomClient.mediaType.video);
+    });
+    bindClick('stopVideoButton', async () => {
+        if (!ensureRoomClient('stop video')) return;
+        setVideoButtonsDisabled(true);
+
+        try {
+            await rc.closeProducer(RoomClient.mediaType.video);
+            // await rc.pauseProducer(RoomClient.mediaType.video);
+        } catch (error) {
+            console.error('Error stopping video producer', error);
+        } finally {
+            video = false;
+            hide(stopVideoButton);
+            BUTTONS.main.startVideoButton && show(startVideoButton);
+            setVideoButtonsDisabled(false);
+        }
+    });
+
+    bindClick('startScreenButton', async () => {
+        if (!ensureRoomClient('start screen')) return;
+
+        const moderator = rc.getModerator();
+        if (moderator.screen_cant_share) {
+            return userLog('warning', 'The moderator does not allow you to share the screen', 'top-end', 6000);
+        }
+        await rc.produce(RoomClient.mediaType.screen);
+    });
+    bindClick('stopScreenButton', () => {
+        if (!ensureRoomClient('stop screen')) return;
+        rc.closeProducer(RoomClient.mediaType.screen);
+    });
+    bindClick('copyRtmpUrlButton', () => {
+        rc.copyRTMPUrl(rtmpLiveUrl.value);
+    });
+    bindClick('startRtmpButton', () => {
+        if (rc.selectedRtmpFilename == '') {
+            userLog('warning', 'Please select the Video file to stream', 'top-end', 6000);
+            return;
+        }
+        rc.startRTMP();
+    });
+    bindClick('stopRtmpButton', () => {
+        rc.stopRTMP();
+    });
+    bindClick('streamerRtmpButton', () => {
+        rc.openRTMPStreamer();
+    });
+    bindClick('startRtmpURLButton', () => {
+        rc.startRTMPfromURL(rtmpStreamURL.value);
+    });
+    bindClick('stopRtmpURLButton', () => {
+        rc.stopRTMPfromURL();
+    });
+    bindClick('activeRoomsButton', () => {
+        rc.showActiveRooms();
+    });
+    bindClick('fileShareButton', () => {
+        rc.selectFileToShare(socket.id, true);
+    });
+    bindClick('videoShareButton', () => {
+        rc.shareVideo('all');
+    });
+    bindClick('videoCloseBtn', () => {
+        if (rc._moderator.media_cant_sharing) {
+            return userLog('warning', 'The moderator does not allow you close this media', 'top-end', 6000);
+        }
+        rc.closeVideo(true);
+    });
+    bindClick('sendAbortBtn', () => {
+        rc.abortFileTransfer();
+    });
+    bindClick('receiveAbortBtn', () => {
+        rc.abortReceiveFileTransfer();
+    });
+    bindClick('receiveHideBtn', () => {
+        rc.hideFileTransfer();
+    });
+    bindClick('whiteboardButton', () => {
+        toggleWhiteboard();
+    });
+    bindClick('documentPiPButton', () => {
+        rc.toggleDocumentPIP();
+    });
+    bindClick('snapshotRoomButton', () => {
+        rc.snapshotRoom();
+    });
+    bindClick('whiteboardPencilBtn', () => {
+        whiteboardIsDrawingMode(true);
+    });
+    bindClick('whiteboardVanishingBtn', () => {
+        whiteboardIsVanishingMode(true);
+    });
+    bindClick('whiteboardObjectBtn', () => {
+        whiteboardIsDrawingMode(false);
+    });
+    bindClick('whiteboardUndoBtn', () => {
+        whiteboardAction(getWhiteboardAction('undo'));
+    });
+    bindClick('whiteboardRedoBtn', () => {
+        whiteboardAction(getWhiteboardAction('redo'));
+    });
+    bindClick('whiteboardSaveBtn', () => {
+        wbCanvasSaveImg();
+    });
+    bindClick('whiteboardImgFileBtn', () => {
+        whiteboardAddObj('imgFile');
+    });
+    bindClick('whiteboardPdfFileBtn', () => {
+        whiteboardAddObj('pdfFile');
+    });
+    bindClick('whiteboardImgUrlBtn', () => {
+        whiteboardAddObj('imgUrl');
+    });
+    bindClick('whiteboardTextBtn', () => {
+        whiteboardAddObj('text');
+    });
+    bindClick('whiteboardStickyNoteBtn', () => {
+        whiteboardAddObj('stickyNote');
+    });
+    bindClick('whiteboardLineBtn', () => {
+        whiteboardAddObj('line');
+    });
+    bindClick('whiteboardRectBtn', () => {
+        whiteboardAddObj('rect');
+    });
+    bindClick('whiteboardTriangleBtn', () => {
+        whiteboardAddObj('triangle');
+    });
+    bindClick('whiteboardCircleBtn', () => {
+        whiteboardAddObj('circle');
+    });
+    bindClick('whiteboardEraserBtn', () => {
+        whiteboardIsEraser(true);
+    });
+    bindClick('whiteboardCleanBtn', () => {
+        confirmClearBoard();
+    });
+    bindClick('whiteboardShortcutsBtn', () => {
+        showWhiteboardShortcuts();
+    });
+    bindClick('whiteboardCloseBtn', () => {
+        whiteboardAction(getWhiteboardAction('close'));
+    });
+    bindClick('whiteboardLockBtn', () => {
+        toggleLockUnlockWhiteboard();
+    });
+    bindClick('whiteboardUnlockBtn', () => {
+        toggleLockUnlockWhiteboard();
+    });
+    bindClick('participantsSaveBtn', () => {
+        saveRoomPeers();
+    });
+    bindClick('participantsUnreadMessagesBtn', () => {
+        rc.toggleUnreadMsg();
+    });
+    bindClick('participantsRaiseHandBtn', () => {
+        rc.toggleRaiseHands();
+    });
+    const searchParticipantsFromList = document.getElementById('searchParticipantsFromList');
+    if (searchParticipantsFromList) {
+        searchParticipantsFromList.onkeyup = () => {
+            rc.searchPeer();
+        };
+    }
+    bindClick('lockRoomButton', () => {
+        rc.roomAction('lock');
+    });
+    bindClick('unlockRoomButton', () => {
+        rc.roomAction('unlock');
+    });
+    bindClick('aboutButton', () => {
+        showAbout();
+    });
+    bindClick('restartICEButton', async () => {
+        await rc.restartIce();
+    });
+}
+
+// ####################################################
+// HANDLE INIT USER
+// ####################################################
+
+function setButtonsInit() {
+    if (!isMobileDevice) {
+        setTippy('initAudioButton', 'Toggle the audio', 'top');
+        setTippy('initVideoButton', 'Toggle the video', 'top');
+        setTippy('initAudioVideoButton', 'Toggle the audio & video', 'top');
+        setTippy('initStartScreenButton', 'Toggle screen sharing', 'top');
+        setTippy('initStopScreenButton', 'Toggle screen sharing', 'top');
+        setTippy('initVideoMirrorButton', 'Toggle video mirror', 'top');
+        setTippy('initVirtualBackgroundButton', 'Set Virtual Background or Blur', 'top');
+        setTippy('initUsernameEmojiButton', 'Toggle username emoji', 'top');
+    }
+    if (!isAudioAllowed) hide(initAudioButton);
+    if (!isVideoAllowed) hide(initVideoButton);
+    if (!isAudioAllowed || !isVideoAllowed) hide(initAudioVideoButton);
+    if ((!isAudioAllowed && !isVideoAllowed) || isMobileDevice) hide(initVideoAudioRefreshButton);
+    isAudioVideoAllowed = isAudioAllowed && isVideoAllowed;
+}
+
+function handleSelectsInit() {
+    // devices init options
+    initVideoSelect.onchange = async () => {
+        await changeCamera(initVideoSelect.value);
+        videoSelect.selectedIndex = initVideoSelect.selectedIndex;
+        refreshLsDevices();
+    };
+    initMicrophoneSelect.onchange = () => {
+        microphoneSelect.selectedIndex = initMicrophoneSelect.selectedIndex;
+        refreshLsDevices();
+    };
+    initSpeakerSelect.onchange = () => {
+        speakerSelect.selectedIndex = initSpeakerSelect.selectedIndex;
+        refreshLsDevices();
+    };
+}
+
+async function setSelectsInit() {
+    if (localStorageDevices) {
+        console.log('04.0 ----> Get Local Storage Devices before', localStorageDevices);
+        //
+        const initMicrophoneExist = selectOptionByValueExist(initMicrophoneSelect, localStorageDevices.audio.select);
+        const initSpeakerExist = selectOptionByValueExist(initSpeakerSelect, localStorageDevices.speaker.select);
+        const initVideoExist = selectOptionByValueExist(initVideoSelect, localStorageDevices.video.select);
+        //
+        const microphoneExist = selectOptionByValueExist(microphoneSelect, localStorageDevices.audio.select);
+        const speakerExist = selectOptionByValueExist(speakerSelect, localStorageDevices.speaker.select);
+        const videoExist = selectOptionByValueExist(videoSelect, localStorageDevices.video.select);
+
+        console.log('Check for audio changes', {
+            previous: localStorageDevices.audio.select,
+            current: microphoneSelect.value,
+        });
+
+        if (!initMicrophoneExist || !microphoneExist) {
+            console.log('04.1 ----> Audio devices seems changed, use default index 0');
+            initMicrophoneSelect.selectedIndex = 0;
+            microphoneSelect.selectedIndex = 0;
+            refreshLsDevices();
+        }
+
+        console.log('Check for speaker changes', {
+            previous: localStorageDevices.speaker.select,
+            current: speakerSelect.value,
+        });
+
+        if (!initSpeakerExist || !speakerExist) {
+            console.log('04.2 ----> Speaker devices seems changed, use default index 0');
+            initSpeakerSelect.selectedIndex = 0;
+            speakerSelect.selectedIndex = 0;
+            refreshLsDevices();
+        }
+
+        console.log('Check for video changes', {
+            previous: localStorageDevices.video.select,
+            current: videoSelect.value,
+        });
+
+        if (!initVideoExist || !videoExist) {
+            console.log('04.3 ----> Video devices seems changed, use default index 0');
+            initVideoSelect.selectedIndex = 0;
+            videoSelect.selectedIndex = 0;
+            refreshLsDevices();
+        }
+
+        //
+        console.log('04.4 ----> Get Local Storage Devices after', lS.getLocalStorageDevices());
+    }
+    if (initVideoSelect.value) await changeCamera(initVideoSelect.value);
+}
+
+function selectOptionByValueExist(selectElement, value) {
+    let foundValue = false;
+    for (let i = 0; i < selectElement.options.length; i++) {
+        if (selectElement.options[i].value === value) {
+            selectElement.selectedIndex = i;
+            foundValue = true;
+            break;
+        }
+    }
+    return foundValue;
+}
+
+function refreshLsDevices() {
+    lS.setLocalStorageDevices(lS.MEDIA_TYPE.video, videoSelect.selectedIndex, videoSelect.value);
+    lS.setLocalStorageDevices(lS.MEDIA_TYPE.audio, microphoneSelect.selectedIndex, microphoneSelect.value);
+    lS.setLocalStorageDevices(lS.MEDIA_TYPE.speaker, speakerSelect.selectedIndex, speakerSelect.value);
+}
+
+async function changeCamera(deviceId) {
+    if (!deviceId) return;
+
+    const hasActiveCameraPreview =
+        initStream || (rc && rc.producerExist && rc.producerExist(RoomClient.mediaType.video));
+
+    if (!autoStartDevices && !hasActiveCameraPreview) {
+        refreshLsDevices();
+        return;
+    }
+
+    if (initStream) {
+        await stopTracks(initStream);
+        elemDisplay('initVideo', true);
+        initVideoContainerShow();
+    }
+    const videoConstraints = {
+        audio: false,
+        video: {
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+            deviceId: { exact: deviceId },
+            aspectRatio: 1.777,
+        },
+    };
+    await navigator.mediaDevices
+        .getUserMedia(videoConstraints)
+        .then(async (camStream) => {
+            initVideo.srcObject = camStream;
+            initStream = camStream;
+            console.log(
+                '04.5 ----> Success attached init cam video stream',
+                initStream.getVideoTracks()[0].getSettings()
+            );
+            checkInitConfig();
+            camera = detectCameraFacingMode(camStream);
+            handleCameraMirror(initVideo);
+            isInitVideoLoaded = true;
+        })
+        .catch((error) => {
+            console.error('[Error] changeCamera', error);
+            handleDeviceRequestError('camera', error);
+            isInitVideoLoaded = false;
+        });
+
+    if (isVideoAllowed) {
+        await loadVirtualBackgroundSettings();
+    }
+}
+
+function detectCameraFacingMode(stream) {
+    if (!stream || !stream.getVideoTracks().length) {
+        console.warn("No video track found in the stream. Defaulting to 'user'.");
+        return 'user';
+    }
+    const videoTrack = stream.getVideoTracks()[0];
+    const settings = videoTrack.getSettings();
+    const capabilities = videoTrack.getCapabilities?.() || {};
+    const facingMode = settings.facingMode || capabilities.facingMode?.[0] || 'user';
+    return facingMode === 'environment' ? 'environment' : 'user';
+}
+
+// ####################################################
+// MEDIA ACCESS HANDLERS
+// ####################################################
+
+function handleDeviceRequestError(deviceType, error) {
+    console.error(`Error requesting ${deviceType}`, error);
+
+    if (!error) return;
+
+    const isCamera = deviceType === 'camera';
+    const deviceLabel = isCamera ? 'camera' : 'microphone';
+    const blockedMessage = `Access to the ${deviceLabel} is blocked in your browser settings. Please enable it for this site.`;
+    const notFoundMessage = `No suitable ${deviceLabel} was found. Please check your ${deviceLabel} connection and settings.`;
+    let message = `Unable to access the ${deviceLabel}.`;
+
+    switch (error.name) {
+        case 'NotAllowedError':
+        case 'SecurityError':
+        case 'PermissionDeniedError':
+            message = blockedMessage;
+            break;
+        case 'NotFoundError':
+        case 'DevicesNotFoundError':
+        case 'OverconstrainedError':
+        case 'ConstraintNotSatisfiedError':
+            message = notFoundMessage;
+            break;
+        default:
+            break;
+    }
+
+    userLog('error', message, 'top-end', 6000);
+}
+
+function handleMediaError(mediaType, err, redirectURL = false) {
+    sound('alert');
+
+    let errMessage = err;
+    let getUserMediaError = true;
+
+    switch (err.name) {
+        case 'NotFoundError':
+        case 'DevicesNotFoundError':
+            errMessage = 'Required track is missing';
+            break;
+        case 'NotReadableError':
+        case 'TrackStartError':
+            errMessage = 'Already in use';
+            break;
+        case 'OverconstrainedError':
+        case 'ConstraintNotSatisfiedError':
+            errMessage = 'Constraints cannot be satisfied by available devices';
+            if (videoQuality.selectedIndex != 0) {
+                videoQuality.selectedIndex = rc.videoQualitySelectedIndex;
+            }
+            break;
+        case 'NotAllowedError':
+        case 'PermissionDeniedError':
+            errMessage = 'Permission denied in browser';
+            break;
+        case 'TypeError':
+            errMessage = 'Empty constraints object';
+            break;
+        default:
+            getUserMediaError = false;
+            break;
+    }
+
+    if (mediaType === 'screenType' && err.name === 'NotAllowedError') {
+        console.warn('User cancelled the screen sharing prompt');
+        return;
+    }
+
+    let html = `
+    <ul style="text-align: left">
+        <li>Media type: ${mediaType}</li>
+        <li>Error name: ${err.name}</li>
+        <li>
+            <p>Error message:</p>
+            <p style="color: red">${errMessage}</p>
+        </li>`;
+
+    if (getUserMediaError) {
+        html += `
+        <li>Common: <a href="https://blog.addpipe.com/common-getusermedia-errors" target="_blank">getUserMedia errors</a></li>`;
+    }
+    html += `
+        </ul>
+    `;
+
+    popupHtmlMessage(null, image.forbidden, 'Access denied', html, 'center', redirectURL);
+
+    throw new Error(
+        `Access denied for ${mediaType} device [${err.name}]: ${errMessage} check the common getUserMedia errors: https://blog.addpipe.com/common-getusermedia-errors/`
+    );
+}
+
+function popupHtmlMessage(icon, imageUrl, title, html, position, redirectURL = false, reloadPage = false) {
+    Swal.fire({
+        allowOutsideClick: false,
+        allowEscapeKey: false,
+        background: swalBackground,
+        position: position,
+        icon: icon,
+        imageUrl: imageUrl,
+        title: title,
+        html: html,
+        showClass: { popup: 'animate__animated animate__fadeInDown' },
+        hideClass: { popup: 'animate__animated animate__fadeOutUp' },
+    }).then((result) => {
+        if (result.isConfirmed) {
+            if (redirectURL) {
+                return openURL(redirectURL);
+            }
+            if (reloadPage) {
+                location.href = location.href;
+            }
+        }
+    });
+}
+
+async function toggleScreenSharing() {
+    if (initStream) {
+        await stopTracks(initStream);
+        elemDisplay('initVideo', true);
+        initVideoContainerShow();
+    }
+    joinRoomWithScreen = !joinRoomWithScreen;
+    if (joinRoomWithScreen) {
+        const defaultFrameRate = { ideal: 30 };
+        const selectedValue = getId('videoFps').options[localStorageSettings.screen_fps].value;
+        const customFrameRate = parseInt(selectedValue, 10);
+        const frameRate = selectedValue == 'max' ? defaultFrameRate : customFrameRate;
+        await navigator.mediaDevices
+            .getDisplayMedia({ audio: true, video: { frameRate: frameRate } })
+            .then((screenStream) => {
+                if (initVideo.classList.contains('mirror')) {
+                    initVideo.classList.toggle('mirror');
+                }
+                initVideo.srcObject = screenStream;
+                initStream = screenStream;
+                console.log('04.6 ----> Success attached init screen video stream', initStream);
+                show(initStopScreenButton);
+                hide(initStartScreenButton);
+                disable(initVideoSelect, true);
+                disable(initVideoButton, true);
+                disable(initAudioVideoButton, true);
+                disable(initVideoAudioRefreshButton, true);
+                disable(initVirtualBackgroundButton, true);
+            })
+            .catch((error) => {
+                console.error('[Error] toggleScreenSharing', error);
+                joinRoomWithScreen = false;
+                return checkInitVideo(isVideoAllowed);
+            });
+    } else {
+        checkInitVideo(isVideoAllowed);
+        hide(initStopScreenButton);
+        show(initStartScreenButton);
+        disable(initVideoSelect, false);
+        disable(initVideoButton, false);
+        disable(initAudioVideoButton, false);
+        disable(initVideoAudioRefreshButton, false);
+        disable(initVirtualBackgroundButton, false);
+    }
+}
+
+function handleCameraMirror(video) {
+    camera === 'environment'
+        ? video.classList.remove('mirror') // Back camera → No mirror
+        : video.classList.add('mirror'); // Disable mirror for rear camera
+}
+
+function handleSelects() {
+    // devices options
+    videoSelect.onchange = (e) => {
+        videoQuality.selectedIndex = 0;
+        if (rc.producerExist(RoomClient.mediaType.video)) {
+            rc.closeThenProduce(RoomClient.mediaType.video, videoSelect.value);
+        }
+        refreshLsDevices();
+    };
+    videoQuality.onchange = () => {
+        if (rc.producerExist(RoomClient.mediaType.video)) {
+            rc.closeThenProduce(RoomClient.mediaType.video, videoSelect.value);
+        }
+    };
+    screenQuality.onchange = () => {
+        if (rc.producerExist(RoomClient.mediaType.screen)) {
+            rc.closeThenProduce(RoomClient.mediaType.screen);
+        }
+    };
+    screenOptimization.onchange = () => {
+        if (rc.producerExist(RoomClient.mediaType.screen)) {
+            rc.closeThenProduce(RoomClient.mediaType.screen);
+        }
+        localStorageSettings.screen_optimization = screenOptimization.selectedIndex;
+        lS.setSettings(localStorageSettings);
+    };
+    videoFps.onchange = () => {
+        if (rc.producerExist(RoomClient.mediaType.video)) {
+            rc.closeThenProduce(RoomClient.mediaType.video, videoSelect.value);
+        }
+        localStorageSettings.video_fps = videoFps.selectedIndex;
+        lS.setSettings(localStorageSettings);
+    };
+    screenFps.onchange = () => {
+        if (rc.producerExist(RoomClient.mediaType.screen)) {
+            rc.closeThenProduce(RoomClient.mediaType.screen);
+        }
+        localStorageSettings.screen_fps = screenFps.selectedIndex;
+        lS.setSettings(localStorageSettings);
+    };
+    microphoneSelect.onchange = () => {
+        if (rc.producerExist(RoomClient.mediaType.audio)) {
+            rc.closeThenProduce(RoomClient.mediaType.audio, microphoneSelect.value);
+        }
+        refreshLsDevices();
+    };
+    speakerSelect.onchange = () => {
+        rc.changeAudioDestination();
+        refreshLsDevices();
+    };
+    switchDominantSpeakerFocus.onchange = async (e) => {
+        localStorageSettings.dominant_speaker_focus = e.currentTarget.checked;
+        lS.setSettings(localStorageSettings);
+        e.target.blur();
+    };
+    switchPushToTalk.onchange = async (e) => {
+        const producerExist = rc.producerExist(RoomClient.mediaType.audio);
+        if (!producerExist && !isPushToTalkActive) {
+            console.log('Push-to-talk: start audio producer');
+            await requestMicrophone();
+            setTimeout(async function () {
+                await rc.pauseProducer(RoomClient.mediaType.audio);
+                rc.updatePeerInfo(peer_name, socket.id, 'audio', false);
+            }, 1000);
+        }
+        isPushToTalkActive = !isPushToTalkActive;
+        if (producerExist && !isPushToTalkActive) {
+            console.log('Push-to-talk: resume audio producer');
+            await rc.resumeProducer(RoomClient.mediaType.audio);
+            rc.updatePeerInfo(peer_name, socket.id, 'audio', true);
+        }
+        e.target.blur(); // Removes focus from the element
+        rc.roomMessage('ptt', isPushToTalkActive);
+        console.log(`Push-to-talk enabled: ${isPushToTalkActive}`);
+    };
+    document.addEventListener('keydown', async (e) => {
+        if (!isPushToTalkActive) return;
+        if (e.code === 'Space') {
+            if (isSpaceDown) return;
+            await rc.resumeProducer(RoomClient.mediaType.audio);
+            rc.updatePeerInfo(peer_name, socket.id, 'audio', true);
+            isSpaceDown = true;
+            console.log('Push-to-talk: audio resumed');
+        }
+    });
+    document.addEventListener('keyup', async (e) => {
+        if (!isPushToTalkActive) return;
+        if (e.code === 'Space') {
+            await rc.pauseProducer(RoomClient.mediaType.audio);
+            rc.updatePeerInfo(peer_name, socket.id, 'audio', false);
+            isSpaceDown = false;
+            console.log('Push-to-talk: audio paused');
+        }
+    });
+    // room
+    switchBroadcasting.onchange = (e) => {
+        isBroadcastingEnabled = e.currentTarget.checked;
+        rc.roomAction('broadcasting');
+        localStorageSettings.broadcasting = isBroadcastingEnabled;
+        lS.setSettings(localStorageSettings);
+        e.target.blur();
+    };
+    switchLobby.onchange = (e) => {
+        isLobbyEnabled = e.currentTarget.checked;
+        rc.roomAction(isLobbyEnabled ? 'lobbyOn' : 'lobbyOff');
+        rc.lobbyToggle();
+        localStorageSettings.lobby = isLobbyEnabled;
+        lS.setSettings(localStorageSettings);
+        e.target.blur();
+    };
+    switchPitchBar.onchange = (e) => {
+        isPitchBarEnabled = e.currentTarget.checked;
+        rc.roomMessage('pitchBar', isPitchBarEnabled);
+        localStorageSettings.pitch_bar = isPitchBarEnabled;
+        lS.setSettings(localStorageSettings);
+        e.target.blur();
+    };
+    switchSounds.onchange = (e) => {
+        isSoundEnabled = e.currentTarget.checked;
+        rc.roomMessage('sounds', isSoundEnabled);
+        localStorageSettings.sounds = isSoundEnabled;
+        lS.setSettings(localStorageSettings);
+        e.target.blur();
+    };
+    switchShare.onchange = (e) => {
+        notify = e.currentTarget.checked;
+        rc.roomMessage('notify', notify);
+        localStorageSettings.share_on_join = notify;
+        lS.setSettings(localStorageSettings);
+        e.target.blur();
+    };
+    switchKeepButtonsVisible.onchange = (e) => {
+        isButtonsBarOver = isKeepButtonsVisible = e.currentTarget.checked;
+        localStorageSettings.keep_buttons_visible = isButtonsBarOver;
+        lS.setSettings(localStorageSettings);
+        const status = isButtonsBarOver ? 'enabled' : 'disabled';
+        userLog('info', `Buttons always visible ${status}`, 'top-end');
+        e.target.blur();
+    };
+    // recording
+    switchHostOnlyRecording.onchange = (e) => {
+        hostOnlyRecording = e.currentTarget.checked;
+        rc.roomAction(hostOnlyRecording ? 'hostOnlyRecordingOn' : 'hostOnlyRecordingOff');
+        localStorageSettings.host_only_recording = hostOnlyRecording;
+        lS.setSettings(localStorageSettings);
+        e.target.blur();
+    };
+    switchServerRecording.onchange = (e) => {
+        rc.recording.recSyncServerRecording = e.currentTarget.checked;
+        rc.roomMessage('recSyncServer', rc.recording.recSyncServerRecording);
+        localStorageSettings.rec_server = rc.recording.recSyncServerRecording;
+        lS.setSettings(localStorageSettings);
+        e.target.blur();
+    };
+    // styling
+    keepCustomTheme.onchange = (e) => {
+        themeCustom.keep = e.currentTarget.checked;
+        selectTheme.disabled = themeCustom.keep;
+        rc.roomMessage('customThemeKeep', themeCustom.keep);
+        localStorageSettings.theme_custom = themeCustom.keep;
+        localStorageSettings.theme_color = themeCustom.color;
+        lS.setSettings(localStorageSettings);
+        setTheme();
+        e.target.blur();
+    };
+    BtnAspectRatio.onchange = () => {
+        adaptAspectRatio(videoMediaContainer.childElementCount);
+        localStorageSettings.aspect_ratio = BtnAspectRatio.selectedIndex;
+        lS.setSettings(localStorageSettings);
+    };
+    BtnVideoObjectFit.onchange = () => {
+        rc.handleVideoObjectFit(BtnVideoObjectFit.value);
+        localStorageSettings.video_obj_fit = BtnVideoObjectFit.selectedIndex;
+        lS.setSettings(localStorageSettings);
+    }; // cover
+    BtnVideoControls.onchange = () => {
+        rc.handleVideoControls(BtnVideoControls.value);
+        localStorageSettings.video_controls = BtnVideoControls.selectedIndex;
+        lS.setSettings(localStorageSettings);
+    };
+    selectTheme.onchange = () => {
+        localStorageSettings.theme = selectTheme.selectedIndex;
+        lS.setSettings(localStorageSettings);
+        setTheme();
+    };
+    BtnsBarPosition.onchange = () => {
+        rc.changeBtnsBarPosition(BtnsBarPosition.value);
+        localStorageSettings.buttons_bar = BtnsBarPosition.selectedIndex;
+        lS.setSettings(localStorageSettings);
+        refreshMainButtonsToolTipPlacement();
+        resizeMainButtons();
+    };
+    pinVideoPosition.onchange = () => {
+        rc.toggleVideoPin(pinVideoPosition.value);
+        localStorageSettings.pin_grid = pinVideoPosition.selectedIndex;
+        lS.setSettings(localStorageSettings);
+    };
+    // chat
+    showChatOnMsg.onchange = (e) => {
+        rc.showChatOnMessage = e.currentTarget.checked;
+        rc.roomMessage('showChat', rc.showChatOnMessage);
+        localStorageSettings.show_chat_on_msg = rc.showChatOnMessage;
+        lS.setSettings(localStorageSettings);
+        e.target.blur();
+    };
+    speechIncomingMsg.onchange = (e) => {
+        rc.speechInMessages = e.currentTarget.checked;
+        rc.roomMessage('speechMessages', rc.speechInMessages);
+        localStorageSettings.speech_in_msg = rc.speechInMessages;
+        lS.setSettings(localStorageSettings);
+        e.target.blur();
+    };
+    transcriptShowOnMsg.onchange = (e) => {
+        transcription.showOnMessage = e.currentTarget.checked;
+        rc.roomMessage('transcriptShowOnMsg', transcription.showOnMessage);
+        localStorageSettings.transcript_show_on_msg = transcription.showOnMessage;
+        lS.setSettings(localStorageSettings);
+        e.target.blur();
+    };
+    // whiteboard options
+    wbDrawingColorEl.onchange = () => {
+        wbCanvas.freeDrawingBrush.color = wbDrawingColorEl.value;
+        whiteboardIsDrawingMode(true);
+    };
+    wbBackgroundColorEl.onchange = () => {
+        setWhiteboardBgColor(wbBackgroundColorEl.value);
+    };
+    whiteboardGhostButton.onclick = (e) => {
+        wbIsBgTransparent = !wbIsBgTransparent;
+        wbIsBgTransparent ? wbCanvasBackgroundColor('rgba(0, 0, 0, 0.100)') : setTheme();
+        if (BUTTONS.main.extraButton) {
+            wbIsBgTransparent ? hide(toggleExtraButton) : show(toggleExtraButton);
+        }
+    };
+    whiteboardGridBtn.onclick = (e) => {
+        toggleCanvasGrid();
+    };
+    // room moderator rules
+    switchEveryonePrivacy.onchange = (e) => {
+        const videoStartPrivacy = e.currentTarget.checked;
+        isVideoPrivacyActive = !videoStartPrivacy;
+        rc.toggleVideoPrivacyMode();
+        rc.updateRoomModerator({ type: 'video_start_privacy', status: videoStartPrivacy });
+        rc.roomMessage('video_start_privacy', videoStartPrivacy);
+        localStorageSettings.moderator_video_start_privacy = videoStartPrivacy;
+        lS.setSettings(localStorageSettings);
+        e.target.blur();
+    };
+    switchEveryoneMute.onchange = (e) => {
+        const audioStartMuted = e.currentTarget.checked;
+        rc.updateRoomModerator({ type: 'audio_start_muted', status: audioStartMuted });
+        rc.roomMessage('audio_start_muted', audioStartMuted);
+        localStorageSettings.moderator_audio_start_muted = audioStartMuted;
+        lS.setSettings(localStorageSettings);
+        e.target.blur();
+    };
+    switchEveryoneHidden.onchange = (e) => {
+        const videoStartHidden = e.currentTarget.checked;
+        rc.updateRoomModerator({ type: 'video_start_hidden', status: videoStartHidden });
+        rc.roomMessage('video_start_hidden', videoStartHidden);
+        localStorageSettings.moderator_video_start_hidden = videoStartHidden;
+        lS.setSettings(localStorageSettings);
+        e.target.blur();
+    };
+    switchEveryoneCantUnmute.onchange = (e) => {
+        const audioCantUnmute = e.currentTarget.checked;
+        rc.updateRoomModerator({ type: 'audio_cant_unmute', status: audioCantUnmute });
+        rc.roomMessage('audio_cant_unmute', audioCantUnmute);
+        localStorageSettings.moderator_audio_cant_unmute = audioCantUnmute;
+        lS.setSettings(localStorageSettings);
+        e.target.blur();
+    };
+    switchEveryoneCantUnhide.onchange = (e) => {
+        const videoCantUnhide = e.currentTarget.checked;
+        rc.updateRoomModerator({ type: 'video_cant_unhide', status: videoCantUnhide });
+        rc.roomMessage('video_cant_unhide', videoCantUnhide);
+        localStorageSettings.moderator_video_cant_unhide = videoCantUnhide;
+        lS.setSettings(localStorageSettings);
+        e.target.blur();
+    };
+    switchEveryoneCantShareScreen.onchange = (e) => {
+        const screenCantShare = e.currentTarget.checked;
+        rc.updateRoomModerator({ type: 'screen_cant_share', status: screenCantShare });
+        rc.roomMessage('screen_cant_share', screenCantShare);
+        localStorageSettings.moderator_screen_cant_share = screenCantShare;
+        lS.setSettings(localStorageSettings);
+        e.target.blur();
+    };
+    switchEveryoneCantChatPrivately.onchange = (e) => {
+        const chatCantPrivately = e.currentTarget.checked;
+        rc.updateRoomModerator({ type: 'chat_cant_privately', status: chatCantPrivately });
+        rc.roomMessage('chat_cant_privately', chatCantPrivately);
+        localStorageSettings.moderator_chat_cant_privately = chatCantPrivately;
+        lS.setSettings(localStorageSettings);
+        e.target.blur();
+    };
+    switchEveryoneCantChatChatGPT.onchange = (e) => {
+        const chatCantChatGPT = e.currentTarget.checked;
+        rc.updateRoomModerator({ type: 'chat_cant_chatgpt', status: chatCantChatGPT });
+        rc.roomMessage('chat_cant_chatgpt', chatCantChatGPT);
+        localStorageSettings.moderator_chat_cant_chatgpt = chatCantChatGPT;
+        lS.setSettings(localStorageSettings);
+        e.target.blur();
+    };
+    switchEveryoneCantChatDeepSeek.onchange = (e) => {
+        const chatCantDeepSeek = e.currentTarget.checked;
+        rc.updateRoomModerator({ type: 'chat_cant_deep_seek', status: chatCantDeepSeek });
+        rc.roomMessage('chat_cant_deep_seek', chatCantDeepSeek);
+        localStorageSettings.moderator_chat_cant_deep_seek = chatCantDeepSeek;
+        lS.setSettings(localStorageSettings);
+        e.target.blur();
+    };
+    switchEveryoneCantMediaSharing.onchange = (e) => {
+        const mediaCantSharing = e.currentTarget.checked;
+        rc.updateRoomModerator({ type: 'media_cant_sharing', status: mediaCantSharing });
+        rc.roomMessage('media_cant_sharing', mediaCantSharing);
+        localStorageSettings.moderator_media_cant_sharing = mediaCantSharing;
+        lS.setSettings(localStorageSettings);
+        e.target.blur();
+    };
+    switchDisconnectAllOnLeave.onchange = (e) => {
+        const disconnectAll = e.currentTarget.checked;
+        rc.roomMessage('disconnect_all_on_leave', disconnectAll);
+        localStorageSettings.moderator_disconnect_all_on_leave = disconnectAll;
+        lS.setSettings(localStorageSettings);
+        e.target.blur();
+    };
+
+    // handle Shortcuts
+    handleKeyboardShortcuts();
+}
+
+// ####################################################
+// KEYBOARD SHORTCUTS
+// ####################################################
+
+function handleKeyboardShortcuts() {
+    if (!isDesktopDevice || !BUTTONS.settings.keyboardShortcuts) {
+        elemDisplay('tabShortcutsBtn', false);
+        setKeyboardShortcuts(false);
+    } else {
+        switchShortcuts.onchange = (e) => {
+            const status = setKeyboardShortcuts(e.currentTarget.checked);
+            userLog('info', `Keyboard shortcuts ${status}`, 'top-end');
+            e.target.blur();
+        };
+
+        document.addEventListener('keydown', (event) => {
+            if (
+                !isShortcutsEnabled ||
+                rc.isChatOpen ||
+                wbIsOpen ||
+                rc.isEditorOpen ||
+                (!isPresenter && isBroadcastingEnabled)
+            )
+                return;
+
+            const key = event.key.toLowerCase(); // Convert to lowercase for simplicity
+            console.log(`Detected shortcut: ${key}`);
+
+            const { audio_cant_unmute, video_cant_unhide, screen_cant_share } = rc._moderator;
+            const notPresenter = isRulesActive && !isPresenter;
+
+            switch (key) {
+                case 'a':
+                    if (notPresenter && !audio && (audio_cant_unmute || !BUTTONS.main.startAudioButton)) {
+                        userLog('warning', 'The presenter has disabled your ability to enable audio', 'top-end');
+                        break;
+                    }
+                    audio ? stopAudioButton.click() : startAudioButton.click();
+                    break;
+                case 'v':
+                    if (notPresenter && !video && (video_cant_unhide || !BUTTONS.main.startVideoButton)) {
+                        userLog('warning', 'The presenter has disabled your ability to enable video', 'top-end');
+                        break;
+                    }
+                    video ? stopVideoButton.click() : startVideoButton.click();
+                    break;
+                case 's':
+                    if (notPresenter && !screen && (screen_cant_share || !BUTTONS.main.startScreenButton)) {
+                        userLog('warning', 'The presenter has disabled your ability to share the screen', 'top-end');
+                        break;
+                    }
+                    screen ? stopScreenButton.click() : startScreenButton.click();
+                    break;
+                case 'h':
+                    if (notPresenter && !BUTTONS.main.raiseHandButton) {
+                        userLog('warning', 'The presenter has disabled your ability to raise your hand', 'top-end');
+                        break;
+                    }
+                    hand ? lowerHandButton.click() : raiseHandButton.click();
+                    break;
+                case 'c':
+                    if (notPresenter && !BUTTONS.main.chatButton) {
+                        userLog('warning', 'The presenter has disabled your ability to open the chat', 'top-end');
+                        break;
+                    }
+                    chatButton.click();
+                    break;
+                case 'o':
+                    if (notPresenter && !BUTTONS.main.settingsButton) {
+                        userLog('warning', 'The presenter has disabled your ability to open the settings', 'top-end');
+                        break;
+                    }
+                    settingsButton.click();
+                    break;
+                case 'x':
+                    if (notPresenter && !BUTTONS.main.hideMeButton) {
+                        userLog('warning', 'The presenter has disabled your ability to hide yourself', 'top-end');
+                        break;
+                    }
+                    hideMeButton.click();
+                    break;
+                case 'r':
+                    if (notPresenter && (hostOnlyRecording || !BUTTONS.settings.tabRecording)) {
+                        userLog('warning', 'The presenter has disabled your ability to start recording', 'top-end');
+                        break;
+                    }
+                    isRecording ? stopRecButton.click() : startRecButton.click();
+                    break;
+                case 'j':
+                    if (notPresenter && !BUTTONS.main.emojiRoomButton) {
+                        userLog('warning', 'The presenter has disabled your ability to open the room emoji', 'top-end');
+                        break;
+                    }
+                    emojiRoomButton.click();
+                    break;
+                case 'k':
+                    if (notPresenter && !BUTTONS.main.transcriptionButton) {
+                        userLog('warning', 'The presenter has disabled your ability to start transcription', 'top-end');
+                        break;
+                    }
+                    transcriptionButton.click();
+                    break;
+                case 'p':
+                    if (notPresenter && !BUTTONS.main.pollButton) {
+                        userLog('warning', 'The presenter has disabled your ability to start a poll', 'top-end');
+                        break;
+                    }
+                    pollButton.click();
+                    break;
+                case 'e':
+                    if (notPresenter && !BUTTONS.main.editorButton) {
+                        userLog('warning', 'The presenter has disabled your ability to open the editor', 'top-end');
+                        break;
+                    }
+                    editorButton.click();
+                    break;
+                case 'w':
+                    if (notPresenter && !BUTTONS.main.whiteboardButton) {
+                        userLog('warning', 'The presenter has disabled your ability to open the whiteboard', 'top-end');
+                        break;
+                    }
+                    whiteboardButton.click();
+                    break;
+                case 'd':
+                    if (!showDocumentPipBtn) {
+                        userLog('warning', 'The document PIP is not supported in this browser', 'top-end');
+                        break;
+                    }
+                    if (notPresenter && !BUTTONS.main.documentPiPButton) {
+                        userLog(
+                            'warning',
+                            'The presenter has disabled your ability to open the document PIP',
+                            'top-end'
+                        );
+                        break;
+                    }
+                    documentPiPButton.click();
+                    break;
+                case 't':
+                    if (notPresenter && !BUTTONS.main.snapshotRoomButton) {
+                        userLog('warning', 'The presenter has disabled your ability to take a snapshot', 'top-end');
+                        break;
+                    }
+                    snapshotRoomButton.click();
+                    break;
+                case 'f':
+                    if (notPresenter && !BUTTONS.settings.fileSharing) {
+                        userLog('warning', 'The presenter has disabled your ability to share files', 'top-end');
+                        break;
+                    }
+                    fileShareButton.click();
+                    break;
+                //...
+                default:
+                    console.log(`Unhandled shortcut key: ${key}`);
+            }
+        });
+    }
+}
+
+function setKeyboardShortcuts(enabled) {
+    isShortcutsEnabled = enabled;
+    localStorageSettings.keyboard_shortcuts = isShortcutsEnabled;
+    lS.setSettings(localStorageSettings);
+    return isShortcutsEnabled ? 'enabled' : 'disabled';
+}
+
+// ####################################################
+// HTML INPUTS
+// ####################################################
+
+function handleInputs() {
+    chatMessage.onkeyup = (e) => {
+        if (e.keyCode === 13 && (isMobileDevice || !e.shiftKey)) {
+            e.preventDefault();
+            chatSendButton.click();
+        }
+    };
+    chatMessage.oninput = function () {
+        if (isChatPasteTxt) return;
+        const chatInputEmoji = {
+            '<3': '❤️',
+            '</3': '💔',
+            ':D': '😀',
+            ':)': '😃',
+            ';)': '😉',
+            ':(': '😒',
+            ':p': '😛',
+            ';p': '😜',
+            ":'(": '😢',
+            ':+1:': '👍',
+            ':*': '😘',
+            ':O': '😲',
+            ':|': '😐',
+            ':*(': '😭',
+            XD: '😆',
+            ':B': '😎',
+            ':P': '😜',
+            '<(': '👎',
+            '>:(': '😡',
+            ':S': '😟',
+            ':X': '🤐',
+            ';(': '😥',
+            ':T': '😖',
+            ':@': '😠',
+            ':$': '🤑',
+            ':&': '🤗',
+            ':#': '🤔',
+            ':!': '😵',
+            ':W': '😷',
+            ':%': '🤒',
+            ':*!': '🤩',
+            ':G': '😬',
+            ':R': '😋',
+            ':M': '🤮',
+            ':L': '🥴',
+            ':C': '🥺',
+            ':F': '🥳',
+            ':Z': '🤢',
+            ':^': '🤓',
+            ':K': '🤫',
+            ':D!': '🤯',
+            ':H': '🧐',
+            ':U': '🤥',
+            ':V': '🤪',
+            ':N': '🥶',
+            ':J': '🥴',
+        };
+        // Create a regular expression pattern for all keys in chatInputEmoji
+        const regexPattern = new RegExp(
+            Object.keys(chatInputEmoji)
+                .map((key) => key.replace(/([()[{*+.$^\\|?])/g, '\\$1'))
+                .join('|'),
+            'gim'
+        );
+        // Replace matching patterns with corresponding emojis
+        this.value = this.value.replace(regexPattern, (match) => chatInputEmoji[match]);
+        rc.checkLineBreaks();
+    };
+
+    chatMessage.onpaste = () => {
+        isChatPasteTxt = true;
+        rc.checkLineBreaks();
+    };
+}
+
+// ####################################################
+// EMOJI PIKER
+// ####################################################
+
+function toggleUsernameEmoji() {
+    getId('usernameEmoji').classList.toggle('hidden');
+}
+
+function handleUsernameEmojiPicker() {
+    const pickerOptions = {
+        theme: 'dark',
+        onEmojiSelect: addEmojiToUsername,
+    };
+    const emojiUsernamePicker = new EmojiMart.Picker(pickerOptions);
+    getId('usernameEmoji').appendChild(emojiUsernamePicker);
+
+    function addEmojiToUsername(data) {
+        getId('usernameInput').value += data.native;
+        toggleUsernameEmoji();
+    }
+
+    const initUsernameEmojiButton = getId('initUsernameEmojiButton');
+    const usernameEmoji = getId('usernameEmoji');
+    handleClickOutside(emojiUsernamePicker, initUsernameEmojiButton, () => {
+        if (usernameEmoji && !usernameEmoji.classList.contains('hidden')) {
+            usernameEmoji.classList.add('hidden');
+        }
+    });
+}
+
+function handleChatEmojiPicker() {
+    const pickerOptions = {
+        theme: 'dark',
+        onEmojiSelect: addEmojiToMsg,
+    };
+    const emojiPicker = new EmojiMart.Picker(pickerOptions);
+    rc.getId('chatEmoji').appendChild(emojiPicker);
+
+    function addEmojiToMsg(data) {
+        chatMessage.value += data.native;
+        rc.toggleChatEmoji();
+    }
+
+    const chatEmojiButton = getId('chatEmojiButton');
+    const chatEmoji = getId('chatEmoji');
+    handleClickOutside(emojiPicker, chatEmojiButton, () => {
+        if (chatEmoji && chatEmoji.classList.contains('show')) {
+            chatEmoji.classList.remove('show');
+            chatEmojiButton.style.color = '#FFFFFF';
+        }
+    });
+}
+
+function handleRoomEmojiPicker() {
+    const soundEmojis = [
+        { emoji: '👍', shortcodes: ':+1:' },
+        { emoji: '👎', shortcodes: ':-1:' },
+        { emoji: '👌', shortcodes: ':ok_hand:' },
+        { emoji: '😀', shortcodes: ':grinning:' },
+        { emoji: '😃', shortcodes: ':smiley:' },
+        { emoji: '😂', shortcodes: ':joy:' },
+        { emoji: '😘', shortcodes: ':kissing_heart:' },
+        { emoji: '❤️', shortcodes: ':heart:' },
+        { emoji: '🎺', shortcodes: ':trumpet:' },
+        { emoji: '🎉', shortcodes: ':tada:' },
+        { emoji: '😮', shortcodes: ':open_mouth:' },
+        { emoji: '👏', shortcodes: ':clap:' },
+        { emoji: '✨', shortcodes: ':sparkles:' },
+        { emoji: '⭐', shortcodes: ':star:' },
+        { emoji: '🌟', shortcodes: ':star2:' },
+        { emoji: '💫', shortcodes: ':dizzy:' },
+        { emoji: '🚀', shortcodes: ':rocket:' },
+    ];
+
+    const header = document.createElement('div');
+    header.className = 'room-emoji-header';
+
+    const title = document.createElement('span');
+    title.textContent = 'Emoji Picker';
+    title.className = 'room-emoji-title';
+
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'room-emoji-close-btn';
+    closeBtn.innerHTML = '<i class="fa fa-times"></i>';
+
+    header.appendChild(title);
+    header.appendChild(closeBtn);
+
+    const tabContainer = document.createElement('div');
+    tabContainer.className = 'room-emoji-tab-container';
+
+    const allTab = document.createElement('button');
+    allTab.textContent = 'All';
+    allTab.className = 'room-emoji-tab active';
+
+    const soundTab = document.createElement('button');
+    soundTab.textContent = 'Sounds';
+    soundTab.className = 'room-emoji-tab';
+
+    tabContainer.appendChild(allTab);
+    tabContainer.appendChild(soundTab);
+
+    const emojiMartDiv = document.createElement('div');
+    emojiMartDiv.className = 'room-emoji-mart';
+    const pickerRoomOptions = {
+        theme: 'dark',
+        onEmojiSelect: sendEmojiToRoom,
+    };
+    const emojiRoomPicker = new EmojiMart.Picker(pickerRoomOptions);
+    emojiMartDiv.appendChild(emojiRoomPicker);
+
+    const emojiGrid = document.createElement('div');
+    emojiGrid.className = 'room-emoji-grid';
+
+    function showEmojiGrid() {
+        emojiGrid.classList.add('visible');
+    }
+    function hideEmojiGrid() {
+        emojiGrid.classList.remove('visible');
+    }
+
+    soundEmojis.forEach(({ emoji, shortcodes }) => {
+        const btn = document.createElement('button');
+        btn.textContent = emoji;
+        btn.className = 'room-emoji-btn';
+        btn.onclick = () => sendEmojiToRoom({ native: emoji, shortcodes });
+        emojiGrid.appendChild(btn);
+    });
+
+    allTab.onclick = () => {
+        allTab.classList.add('active');
+        soundTab.classList.remove('active');
+        emojiMartDiv.style.display = 'block';
+        hideEmojiGrid();
+    };
+    soundTab.onclick = () => {
+        soundTab.classList.add('active');
+        allTab.classList.remove('active');
+        emojiMartDiv.style.display = 'none';
+        showEmojiGrid();
+    };
+
+    emojiPickerContainer.innerHTML = '';
+    emojiPickerContainer.appendChild(header);
+    emojiPickerContainer.appendChild(tabContainer);
+    emojiPickerContainer.appendChild(emojiMartDiv);
+    emojiPickerContainer.appendChild(emojiGrid);
+    emojiPickerContainer.style.display = 'none';
+
+    if (!isMobileDevice) {
+        rc.makeDraggable(emojiPickerContainer, header);
+    }
+
+    emojiRoomButton.onclick = () => {
+        toggleEmojiPicker();
+    };
+    closeBtn.addEventListener('click', (e) => {
+        toggleEmojiPicker();
+    });
+
+    function sendEmojiToRoom(data) {
+        console.log('Selected Emoji', data.native);
+        const cmd = {
+            type: 'roomEmoji',
+            peer_name: peer_name,
+            emoji: data.native,
+            shortcodes: data.shortcodes,
+            broadcast: true,
+        };
+        if (rc.thereAreParticipants()) {
+            rc.emitCmd(cmd);
+        }
+        rc.handleCmd(cmd);
+        // toggleEmojiPicker();
+    }
+
+    function toggleEmojiPicker() {
+        if (emojiPickerContainer.style.display === 'block') {
+            emojiPickerContainer.style.display = 'none';
+            setColor(emojiRoomButton, 'white');
+        } else {
+            emojiPickerContainer.style.display = 'block';
+            setColor(emojiRoomButton, 'yellow');
+        }
+    }
+}
+
+// ####################################################
+// ROOM EDITOR
+// ####################################################
+
+function handleEditor() {
+    const toolbarOptions = [
+        [{ header: [1, 2, 3, false] }, { align: [] }, { background: [] }],
+        ['bold', 'italic', 'underline', 'strike', 'link', 'image', 'code-block'],
+        [{ list: 'ordered' }, { list: 'bullet' }, { list: 'check' }],
+        [{ indent: '+1' }, { indent: '-1' }],
+        ['clean'], // Custom button to clear formatting
+        //...
+    ];
+
+    quill = new Quill('#editor', {
+        modules: {
+            toolbar: {
+                container: toolbarOptions,
+            },
+            syntax: true,
+        },
+        theme: 'snow',
+    });
+
+    applySyntaxHighlighting();
+
+    quill.on('text-change', (delta, oldDelta, source) => {
+        if (!isPresenter && rc.editorIsLocked()) {
+            return;
+        }
+        // console.log('text-change', { delta, oldDelta, source });
+        applySyntaxHighlighting();
+        if (rc.thereAreParticipants() && source === 'user') {
+            socket.emit('editorChange', delta);
+        }
+    });
+}
+
+function applySyntaxHighlighting() {
+    const codeBlocks = document.querySelectorAll('.ql-syntax');
+    codeBlocks.forEach((block) => {
+        hljs.highlightElement(block);
+    });
+}
+
+// ####################################################
+// LOAD SETTINGS FROM LOCAL STORAGE
+// ####################################################
+
+function loadSettingsFromLocalStorage() {
+    if (!rc) {
+        console.warn('Room client not ready to load settings');
+        return;
+    }
+
+    const settings = localStorageSettings || cloneObject(lS.SFU_SETTINGS);
+
+    try {
+        if (!settings.keep_buttons_visible) {
+            settings.keep_buttons_visible = true;
+            ls.setSettings(settings);
+        }
+
+        rc.showChatOnMessage = settings.show_chat_on_msg;
+        transcription.showOnMessage = settings.transcript_show_on_msg;
+        rc.speechInMessages = settings.speech_in_msg;
+        isPitchBarEnabled = settings.pitch_bar;
+        isSoundEnabled = settings.sounds;
+        isKeepButtonsVisible = settings.keep_buttons_visible;
+        isShortcutsEnabled = settings.keyboard_shortcuts;
+        showChatOnMsg.checked = rc.showChatOnMessage;
+        transcriptShowOnMsg.checked = transcription.showOnMessage;
+        speechIncomingMsg.checked = rc.speechInMessages;
+        switchPitchBar.checked = isPitchBarEnabled;
+        switchSounds.checked = isSoundEnabled;
+        switchShare.checked = notify;
+        switchKeepButtonsVisible.checked = isKeepButtonsVisible;
+        switchShortcuts.checked = isShortcutsEnabled;
+
+        switchServerRecording.checked = settings.rec_server;
+
+        keepCustomTheme.checked = themeCustom.keep;
+        selectTheme.disabled = themeCustom.keep;
+        themeCustom.input.value = themeCustom.color;
+
+        switchDominantSpeakerFocus.checked = settings.dominant_speaker_focus;
+        switchNoiseSuppression.checked = settings.mic_noise_suppression;
+
+        screenOptimization.selectedIndex = settings.screen_optimization;
+        videoFps.selectedIndex = settings.video_fps;
+        screenFps.selectedIndex = settings.screen_fps;
+        BtnAspectRatio.selectedIndex = settings.aspect_ratio;
+        BtnVideoObjectFit.selectedIndex = settings.video_obj_fit;
+        BtnVideoControls.selectedIndex = settings.video_controls;
+        BtnsBarPosition.selectedIndex = settings.buttons_bar;
+        pinVideoPosition.selectedIndex = settings.pin_grid;
+        rc.handleVideoObjectFit(BtnVideoObjectFit.value);
+        rc.handleVideoControls(BtnVideoControls.value);
+        rc.changeBtnsBarPosition(BtnsBarPosition.value);
+        rc.toggleVideoPin(pinVideoPosition.value);
+        refreshMainButtonsToolTipPlacement();
+        resizeMainButtons();
+    } catch (error) {
+        console.warn('Unable to load settings from localStorage', error);
+    }
+}
+
+// ####################################################
+// ROOM CLIENT EVENT LISTNERS
+// ####################################################
+
+function handleRoomClientEvents() {
+    rc.on(RoomClient.EVENTS.startRec, () => {
+        console.log('Room event: Client start recoding');
+        hide(startRecButton);
+        show(stopRecButton);
+        show(pauseRecButton);
+        show(recordingTime);
+        startRecordingTimer();
+        isRecording = true;
+        rc.updatePeerInfo(peer_name, socket.id, 'recording', true);
+    });
+    rc.on(RoomClient.EVENTS.pauseRec, () => {
+        console.log('Room event: Client pause recoding');
+        hide(pauseRecButton);
+        show(resumeRecButton);
+    });
+    rc.on(RoomClient.EVENTS.resumeRec, () => {
+        console.log('Room event: Client resume recoding');
+        hide(resumeRecButton);
+        show(pauseRecButton);
+    });
+    rc.on(RoomClient.EVENTS.stopRec, () => {
+        console.log('Room event: Client stop recoding');
+        hide(stopRecButton);
+        hide(pauseRecButton);
+        hide(resumeRecButton);
+        hide(recordingTime);
+        show(startRecButton);
+        stopRecordingTimer();
+        isRecording = false;
+        rc.updatePeerInfo(peer_name, socket.id, 'recording', false);
+    });
+    rc.on(RoomClient.EVENTS.raiseHand, () => {
+        console.log('Room event: Client raise hand');
+        hide(raiseHandButton);
+        show(lowerHandButton);
+        setColor(lowerHandIcon, 'lime');
+        hand = true;
+    });
+    rc.on(RoomClient.EVENTS.lowerHand, () => {
+        console.log('Room event: Client lower hand');
+        hide(lowerHandButton);
+        show(raiseHandButton);
+        setColor(lowerHandIcon, 'white');
+        hand = false;
+    });
+    rc.on(RoomClient.EVENTS.startAudio, () => {
+        console.log('Room event: Client start audio');
+        hide(startAudioButton);
+        show(stopAudioButton);
+        setColor(startAudioButton, 'red');
+        setAudioButtonsDisabled(false);
+        audio = true;
+    });
+    rc.on(RoomClient.EVENTS.pauseAudio, () => {
+        console.log('Room event: Client pause audio');
+        hide(stopAudioButton);
+        BUTTONS.main.startAudioButton && show(startAudioButton);
+        setColor(startAudioButton, 'red');
+        setAudioButtonsDisabled(false);
+        audio = false;
+    });
+    rc.on(RoomClient.EVENTS.resumeAudio, () => {
+        console.log('Room event: Client resume audio');
+        hide(startAudioButton);
+        BUTTONS.main.startAudioButton && show(stopAudioButton);
+        setAudioButtonsDisabled(false);
+        audio = true;
+    });
+    rc.on(RoomClient.EVENTS.stopAudio, () => {
+        console.log('Room event: Client stop audio');
+        hide(stopAudioButton);
+        show(startAudioButton);
+        setAudioButtonsDisabled(false);
+        stopMicrophoneProcessing();
+        audio = false;
+    });
+    rc.on(RoomClient.EVENTS.startVideo, () => {
+        console.log('Room event: Client start video');
+        hide(startVideoButton);
+        show(stopVideoButton);
+        setColor(startVideoButton, 'red');
+        setVideoButtonsDisabled(false);
+        hideClassElements('videoMenuBar');
+        // if (isParticipantsListOpen) getRoomParticipants();
+        video = true;
+    });
+    rc.on(RoomClient.EVENTS.pauseVideo, () => {
+        console.log('Room event: Client pause video');
+        hide(stopVideoButton);
+        BUTTONS.main.startVideoButton && show(startVideoButton);
+        setColor(startVideoButton, 'red');
+        setVideoButtonsDisabled(false);
+        hideClassElements('videoMenuBar');
+        video = false;
+    });
+    rc.on(RoomClient.EVENTS.resumeVideo, () => {
+        console.log('Room event: Client resume video');
+        hide(startVideoButton);
+        BUTTONS.main.startVideoButton && show(stopVideoButton);
+        setVideoButtonsDisabled(false);
+        isVideoPrivacyActive = false;
+        hideClassElements('videoMenuBar');
+        video = true;
+    });
+    rc.on(RoomClient.EVENTS.stopVideo, () => {
+        console.log('Room event: Client stop video');
+        hide(stopVideoButton);
+        show(startVideoButton);
+        setVideoButtonsDisabled(false);
+        isVideoPrivacyActive = false;
+        hideClassElements('videoMenuBar');
+        // if (isParticipantsListOpen) getRoomParticipants();
+        video = false;
+    });
+    rc.on(RoomClient.EVENTS.startScreen, () => {
+        console.log('Room event: Client start screen');
+        hide(startScreenButton);
+        show(stopScreenButton);
+        hideClassElements('videoMenuBar');
+        // if (isParticipantsListOpen) getRoomParticipants();
+        screen = true;
+    });
+    rc.on(RoomClient.EVENTS.pauseScreen, () => {
+        console.log('Room event: Client pause screen');
+        hide(startScreenButton);
+        show(stopScreenButton);
+        hideClassElements('videoMenuBar');
+        screen = false;
+    });
+    rc.on(RoomClient.EVENTS.resumeScreen, () => {
+        console.log('Room event: Client resume screen');
+        hide(stopScreenButton);
+        show(startScreenButton);
+        hideClassElements('videoMenuBar');
+        screen = true;
+    });
+    rc.on(RoomClient.EVENTS.stopScreen, () => {
+        console.log('Room event: Client stop screen');
+        hide(stopScreenButton);
+        show(startScreenButton);
+        hideClassElements('videoMenuBar');
+        // if (isParticipantsListOpen) getRoomParticipants();
+        screen = false;
+    });
+    rc.on(RoomClient.EVENTS.roomLock, () => {
+        console.log('Room event: Client lock room');
+        hide(lockRoomButton);
+        show(unlockRoomButton);
+        isRoomLocked = true;
+    });
+    rc.on(RoomClient.EVENTS.roomUnlock, () => {
+        console.log('Room event: Client unlock room');
+        hide(unlockRoomButton);
+        show(lockRoomButton);
+        isRoomLocked = false;
+    });
+    rc.on(RoomClient.EVENTS.lobbyOn, () => {
+        console.log('Room event: Client room lobby enabled');
+        if (isRulesActive && !isPresenter) {
+            hide(lobbyButton);
+        }
+        sound('lobby');
+        isLobbyEnabled = true;
+    });
+    rc.on(RoomClient.EVENTS.lobbyOff, () => {
+        console.log('Room event: Client room lobby disabled');
+        isLobbyEnabled = false;
+    });
+    rc.on(RoomClient.EVENTS.hostOnlyRecordingOn, () => {
+        if (isRulesActive && !isPresenter) {
+            console.log('Room event: host only recording enabled');
+            // Stop recording ...
+            if (rc.isRecording() || recordingStatus.innerText != '0s') {
+                rc.saveRecording('Room event: host only recording enabled, going to stop recording');
+            }
+            hide(startRecButton);
+            hide(recordingImage);
+            hide(roomHostOnlyRecording);
+            hide(roomRecordingOptions);
+            hide(roomRecordingServer);
+            show(recordingMessage);
+            hostOnlyRecording = true;
+        }
+    });
+    rc.on(RoomClient.EVENTS.hostOnlyRecordingOff, () => {
+        if (isRulesActive && !isPresenter) {
+            console.log('Room event: host only recording disabled');
+            show(startRecButton);
+            show(recordingImage);
+            hide(roomHostOnlyRecording);
+            hide(recordingMessage);
+            hostOnlyRecording = false;
+        }
+    });
+    rc.on(RoomClient.EVENTS.startRTMP, () => {
+        console.log('Room event: RTMP started');
+        hide(startRtmpButton);
+        show(stopRtmpButton);
+    });
+    rc.on(RoomClient.EVENTS.stopRTMP, () => {
+        console.log('Room event: RTMP stopped');
+        hide(stopRtmpButton);
+        show(startRtmpButton);
+    });
+    rc.on(RoomClient.EVENTS.endRTMP, () => {
+        console.log('Room event: RTMP ended');
+        hide(stopRtmpButton);
+        show(startRtmpButton);
+    });
+    rc.on(RoomClient.EVENTS.startRTMPfromURL, () => {
+        console.log('Room event: RTMP from URL started');
+        hide(startRtmpURLButton);
+        show(stopRtmpURLButton);
+    });
+    rc.on(RoomClient.EVENTS.stopRTMPfromURL, () => {
+        console.log('Room event: RTMP from URL stopped');
+        hide(stopRtmpURLButton);
+        show(startRtmpURLButton);
+    });
+    rc.on(RoomClient.EVENTS.endRTMPfromURL, () => {
+        console.log('Room event: RTMP from URL ended');
+        hide(stopRtmpURLButton);
+        show(startRtmpURLButton);
+    });
+    rc.on(RoomClient.EVENTS.exitRoom, () => {
+        if (isExiting) return;
+        isExiting = true;
+
+        console.log('Room event: Client leave room');
+
+        endRoomSession();
+
+        if (rc.isRecording() || recordingStatus.innerText != '0s') {
+            rc.saveRecording('Room event: Client save recording before to exit');
+        }
+
+        leaveRoom(false); // Don't touch :)
+    });
+}
+
+// ####################################################
+// UTILITY
+// ####################################################
+
+async function leaveRoom(allowCancel = true) {
+    if (rc.isRecording() || recordingStatus.innerText != '0s') {
+        recShowInfo = false;
+        rc.saveRecording('User is leaving the room, saving recording before exit');
+        rc.popupRecordingOnLeaveRoom();
+        return;
+    }
+    survey && survey.enabled ? leaveFeedback(allowCancel) : redirectOnLeave();
+}
+
+function leaveFeedback(allowCancel) {
+    Swal.fire({
+        allowOutsideClick: false,
+        allowEscapeKey: false,
+        showDenyButton: true,
+        showCancelButton: allowCancel,
+        confirmButtonColor: 'green',
+        denyButtonColor: 'red',
+        cancelButtonColor: 'gray',
+        background: swalBackground,
+        imageUrl: image.feedback,
+        position: 'top',
+        title: 'Leave a feedback',
+        text: 'Do you want to rate your MiroTalk experience?',
+        confirmButtonText: `Yes`,
+        denyButtonText: `No`,
+        cancelButtonText: `Cancel`,
+        showClass: { popup: 'animate__animated animate__fadeInDown' },
+        hideClass: { popup: 'animate__animated animate__fadeOutUp' },
+    }).then((result) => {
+        if (result.isConfirmed) {
+            endRoomSession();
+            openURL(survey.url);
+        } else if (result.isDenied) {
+            redirectOnLeave();
+        }
+    });
+}
+
+function redirectOnLeave() {
+    endRoomSession();
+    rc.exitRoom();
+    redirect && redirect.enabled ? openURL(redirect.url) : openURL('/newroom');
+}
+
+function userLog(icon, message, position, timer = 3000) {
+    const Toast = Swal.mixin({
+        background: swalBackground,
+        toast: true,
+        position: position,
+        showConfirmButton: false,
+        timer: timer,
+        timerProgressBar: true,
+    });
+    Toast.fire({
+        icon: icon,
+        title: message,
+        showClass: { popup: 'animate__animated animate__fadeInDown' },
+        hideClass: { popup: 'animate__animated animate__fadeOutUp' },
+    });
+}
+
+function saveDataToFile(dataURL, fileName) {
+    const a = document.createElement('a');
+    a.style.display = 'none';
+    a.href = dataURL;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => {
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(dataURL);
+    }, 100);
+}
+
+function saveObjToJsonFile(dataObj, name) {
+    console.log('Save data', { dataObj: dataObj, name: name });
+    const dataTime = getDataTimeString();
+    let a = document.createElement('a');
+    a.href = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(dataObj, null, 1));
+    a.download = `${dataTime}-${name}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => {
+        document.body.removeChild(a);
+    }, 100);
+    sound('download');
+}
+
+function getDataTimeString() {
+    const d = new Date();
+    const date = d.toISOString().split('T')[0];
+    const time = d.toTimeString().split(' ')[0];
+    return `${date}-${time}`;
+}
+
+function getDataTimeStringFormat() {
+    const d = new Date();
+    const date = d.toISOString().split('T')[0].replace(/-/g, '_');
+    const time = d.toTimeString().split(' ')[0].replace(/:/g, '_');
+    return `${date}_${time}`;
+}
+
+function getUUID() {
+    const uuid4 = ([1e7] + -1e3 + -4e3 + -8e3 + -1e11).replace(/[018]/g, (c) =>
+        (c ^ (crypto.getRandomValues(new Uint8Array(1))[0] & (15 >> (c / 4)))).toString(16)
+    );
+    if (window.localStorage.uuid) {
+        return window.localStorage.uuid;
+    }
+    window.localStorage.uuid = uuid4;
+    return uuid4;
+}
+
+function handleButtonsBar() {
+    showButtons();
+}
+
+function handleDropdownHover(dropdownElement = null) {
+    const supportsHover = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+    if (!supportsHover) return;
+
+    const dropdowns = dropdownElement ? dropdownElement : document.querySelectorAll('.dropdown');
+    console.log(`Dropdown found: ${dropdowns.length}`);
+
+    dropdowns.forEach((dropdown) => {
+        const toggle = dropdown.querySelector('.dropdown-toggle');
+        const menu = dropdown.querySelector('.dropdown-menu');
+
+        if (!toggle || !menu) return;
+
+        let timeoutId;
+
+        dropdown.addEventListener('mouseenter', () => {
+            clearTimeout(timeoutId);
+            const bsDropdown = bootstrap.Dropdown.getInstance(toggle) || new bootstrap.Dropdown(toggle);
+            bsDropdown.show();
+        });
+
+        dropdown.addEventListener('mouseleave', () => {
+            timeoutId = setTimeout(() => {
+                const bsDropdown = bootstrap.Dropdown.getInstance(toggle);
+                if (bsDropdown) {
+                    bsDropdown.hide();
+                }
+            }, 200);
+        });
+
+        menu.addEventListener('mouseenter', () => {
+            clearTimeout(timeoutId);
+        });
+
+        toggle.addEventListener('click', (e) => {
+            e.stopPropagation();
+        });
+    });
+}
+
+function showButtons() {
+    if (!ensureControlElements()) return;
+
+    bottomButtons.style.display = 'flex';
+    if (control) control.style.display = 'none';
+    hide(toggleExtraButton);
+    isButtonsVisible = true;
+}
+
+function checkButtonsBar() {
+    if (!ensureControlElements()) return;
+
+    bottomButtons.style.display = 'flex';
+    hide(toggleExtraButton);
+    if (control) control.style.display = 'none';
+    isButtonsVisible = true;
+}
+
+function enforceCompactToolbar() {
+    const allowedButtons = new Set([
+        'startAudioButton',
+        'stopAudioButton',
+        'startVideoButton',
+        'stopVideoButton',
+        'chatButton',
+        'settingsButton',
+    ]);
+
+    const labelMap = {
+        startAudioButton: 'Audio',
+        stopAudioButton: 'Audio',
+        startVideoButton: 'Camera',
+        stopVideoButton: 'Camera',
+        chatButton: 'Chat',
+        settingsButton: 'Settings',
+    };
+
+    const bottomButtonsContainer = document.getElementById('bottomButtons');
+    if (!bottomButtonsContainer) return;
+
+    bottomButtonsContainer.querySelectorAll('button').forEach((btn) => {
+        if (!allowedButtons.has(btn.id)) {
+            btn.classList.add('hidden');
+            btn.setAttribute('aria-hidden', 'true');
+            return;
+        }
+
+        const cleanLabel =
+            btn.getAttribute('aria-label') || btn.title || labelMap[btn.id] || btn.id.replace('Button', '');
+        btn.setAttribute('aria-label', cleanLabel.trim() || 'control button');
+    });
+
+    if (control) control.style.display = 'none';
+    hide(toggleExtraButton);
+    bottomButtons.style.display = 'flex';
+    isButtonsVisible = true;
+}
+
+function toggleExtraButtons() {
+    if (!ensureControlElements()) return;
+
+    const isControlHidden = control.style.display === 'none' || control.style.display === '';
+    const displayValue = isControlHidden ? 'flex' : 'none';
+    const iconHtml = isControlHidden ? icons.up : icons.down;
+
+    elemDisplay('control', isControlHidden, displayValue);
+    toggleExtraButton.innerHTML = iconHtml;
+    hideClassElements('videoMenuBar');
+}
+
+function hideClassElements(className) {
+    const elements = rc.getEcN(className);
+    for (let i = 0; i < elements.length; i++) {
+        hide(elements[i]);
+    }
+    setCamerasBorderNone();
+}
+
+function setCamerasBorderNone() {
+    const cameras = rc.getEcN('Camera');
+    for (let i = 0; i < cameras.length; i++) {
+        cameras[i].style.setProperty('border', 'none', 'important');
+    }
+}
+
+function hideVideoMenuBar(videoBarId) {
+    const videoMenuBar = rc.getEcN('videoMenuBar');
+    for (let i = 0; i < videoMenuBar.length; i++) {
+        const menuBar = videoMenuBar[i];
+        if (menuBar.id != videoBarId) {
+            hide(menuBar);
+        }
+    }
+}
+
+// https://animate.style
+
+function animateCSS(element, animation, prefix = 'animate__') {
+    return new Promise((resolve, reject) => {
+        const animationName = `${prefix}${animation}`;
+        element.classList.add(`${prefix}animated`, animationName);
+        function handleAnimationEnd(event) {
+            event.stopPropagation();
+            element.classList.remove(`${prefix}animated`, animationName);
+            resolve('Animation ended');
+        }
+        element.addEventListener('animationend', handleAnimationEnd, { once: true });
+    });
+}
+
+function setAudioButtonsDisabled(disabled) {
+    startAudioButton.disabled = disabled;
+    stopAudioButton.disabled = disabled;
+}
+
+function setVideoButtonsDisabled(disabled) {
+    startVideoButton.disabled = disabled;
+    stopVideoButton.disabled = disabled;
+}
+
+async function sound(name, force = false) {
+    if (!isSoundEnabled && !force) return;
+    let sound = '../sounds/' + name + '.wav';
+    let audio = new Audio(sound);
+    try {
+        audio.volume = 0.5;
+        await audio.play();
+    } catch (err) {
+        return false;
+    }
+}
+
+function isValidEmail(email) {
+    const emailRegex = /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i;
+    return emailRegex.test(email);
+}
+
+async function isImageURL(url) {
+    if (!url) return false;
+    try {
+        const response = await fetch(url, { method: 'HEAD' });
+        const contentType = response.headers.get('content-type');
+        return contentType && contentType.startsWith('image/');
+    } catch {
+        return false;
+    }
+}
+
+function isMobile(userAgent) {
+    return !!/Android|webOS|iPhone|iPad|iPod|BB10|BlackBerry|IEMobile|Opera Mini|Mobile|mobile/i.test(userAgent || '');
+}
+
+function isTablet(userAgent) {
+    return /(ipad|tablet|(android(?!.*mobile))|(windows(?!.*phone)(.*touch))|kindle|playbook|silk|(puffin(?!.*(IP|AP|WP))))/.test(
+        userAgent
+    );
+}
+
+function isIpad(userAgent) {
+    return /macintosh/.test(userAgent) && 'ontouchend' in document;
+}
+
+function isDesktop() {
+    return !isMobileDevice && !isTabletDevice && !isIPadDevice;
+}
+
+function openURL(url, blank = false) {
+    blank ? window.open(url, '_blank') : (window.location.href = url);
+}
+
+function bytesToSize(bytes) {
+    let sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+    if (bytes == 0) return '0 Byte';
+    let i = parseInt(Math.floor(Math.log(bytes) / Math.log(1024)));
+    return Math.round(bytes / Math.pow(1024, i), 2) + ' ' + sizes[i];
+}
+
+function setCookie(name, value, expDays) {
+    let date = new Date();
+    date.setTime(date.getTime() + expDays * 24 * 60 * 60 * 1000);
+    const expires = 'expires=' + date.toUTCString();
+    document.cookie = name + '=' + value + '; ' + expires + '; path=/';
+}
+
+function getCookie(cName) {
+    const name = cName + '=';
+    const cDecoded = decodeURIComponent(document.cookie);
+    const cArr = cDecoded.split('; ');
+    let res;
+    cArr.forEach((val) => {
+        if (val.indexOf(name) === 0) res = val.substring(name.length);
+    });
+    return res;
+}
+
+function isHtml(str) {
+    var a = document.createElement('div');
+    a.innerHTML = str;
+    for (var c = a.childNodes, i = c.length; i--; ) {
+        if (c[i].nodeType == 1) return true;
+    }
+    return false;
+}
+
+function handleClickOutside(targetElement, triggerElement, callback, minWidth = 0) {
+    document.addEventListener('click', (e) => {
+        if (minWidth && window.innerWidth > minWidth) return;
+        let el = e.target;
+        let shouldExclude = false;
+        while (el) {
+            if (el instanceof HTMLElement && (el === targetElement || el === triggerElement)) {
+                shouldExclude = true;
+                break;
+            }
+            el = el.parentElement;
+        }
+        if (!shouldExclude) callback();
+    });
+}
+
+function getId(id) {
+    return document.getElementById(id);
+}
+
+// ####################################################
+// HANDLE WHITEBOARD
+// ####################################################
+
+function toggleWhiteboard() {
+    if (!wbIsOpen) rc.sound('open');
+    whiteboardCenter();
+    whiteboard.classList.toggle('show');
+    wbIsOpen = !wbIsOpen;
+}
+
+function whiteboardCenter() {
+    whiteboard.style.top = '50%';
+    whiteboard.style.left = '50%';
+    whiteboard.style.transform = 'translate(-50%, -50%)';
+}
+
+function setupWhiteboard() {
+    setupWhiteboardCanvas();
+    setupWhiteboardCanvasSize();
+    setupWhiteboardLocalListeners();
+    setupWhiteboardShortcuts();
+    setupWhiteboardDragAndDrop();
+    setupWhiteboardResizeListener();
+}
+
+function setupWhiteboardCanvas() {
+    wbCanvas = new fabric.Canvas('wbCanvas');
+    wbCanvas.freeDrawingBrush.color = '#FFFFFF';
+    wbCanvas.freeDrawingBrush.width = 3;
+    whiteboardIsDrawingMode(true);
+}
+
+function setupWhiteboardCanvasSize() {
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+
+    const containerPadding = isMobileDevice ? 10 : 20;
+    const headerHeight = isMobileDevice ? 40 : 60;
+    const extraMargin = 20;
+
+    const availableWidth = viewportWidth - containerPadding - extraMargin;
+    const availableHeight = viewportHeight - containerPadding - headerHeight - extraMargin;
+
+    const scaleX = availableWidth / wbReferenceWidth;
+    const scaleY = availableHeight / wbReferenceHeight;
+    const scale = Math.min(scaleX, scaleY);
+
+    const canvasWidth = wbReferenceWidth * scale;
+    const canvasHeight = wbReferenceHeight * scale;
+
+    wbCanvas.setWidth(canvasWidth);
+    wbCanvas.setHeight(canvasHeight);
+    wbCanvas.setZoom(scale);
+
+    setWhiteboardSize(canvasWidth + containerPadding, canvasHeight + headerHeight + containerPadding);
+
+    whiteboardCenter();
+
+    wbCanvas.calcOffset();
+    wbCanvas.renderAll();
+}
+
+function setWhiteboardSize(w, h) {
+    document.documentElement.style.setProperty('--wb-width', w);
+    document.documentElement.style.setProperty('--wb-height', h);
+}
+
+function setupWhiteboardResizeListener() {
+    let resizeTimer;
+    window.addEventListener('resize', () => {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(() => {
+            if (wbCanvas && wbIsOpen) {
+                setupWhiteboardCanvasSize();
+            }
+        }, 250);
+    });
+    window.addEventListener('orientationchange', () => {
+        setTimeout(() => {
+            if (wbCanvas && wbIsOpen) {
+                setupWhiteboardCanvasSize();
+            }
+        }, 300);
+    });
+}
+
+function drawCanvasGrid() {
+    // Use reference dimensions for grid, zoom will handle scaling
+    const width = wbReferenceWidth;
+    const height = wbReferenceHeight;
+
+    removeCanvasGrid();
+
+    // Draw vertical lines
+    for (let i = 0; i <= width; i += wbGridSize) {
+        wbGridLines.push(createGridLine(i, 0, i, height));
+    }
+    // Draw horizontal lines
+    for (let i = 0; i <= height; i += wbGridSize) {
+        wbGridLines.push(createGridLine(0, i, width, i));
+    }
+
+    // Create a group for grid lines and send it to the back
+    const gridGroup = new fabric.Group(wbGridLines, { selectable: false, evented: false });
+    wbCanvas.add(gridGroup);
+    gridGroup.sendToBack();
+    wbCanvas.renderAll();
+    setColor(whiteboardGridBtn, 'green');
+}
+
+function createGridLine(x1, y1, x2, y2) {
+    return new fabric.Line([x1, y1, x2, y2], {
+        stroke: wbStroke,
+        selectable: false,
+        evented: false,
+    });
+}
+
+function removeCanvasGrid() {
+    wbGridLines.forEach((line) => {
+        line.set({ stroke: wbGridVisible ? wbStroke : 'rgba(255, 255, 255, 0)' });
+        wbCanvas.remove(line);
+    });
+    wbGridLines = [];
+    wbCanvas.renderAll();
+    setColor(whiteboardGridBtn, 'white');
+}
+
+function toggleCanvasGrid() {
+    wbGridVisible = !wbGridVisible;
+    wbGridVisible ? drawCanvasGrid() : removeCanvasGrid();
+    wbCanvasToJson();
+}
+
+function setWhiteboardBgColor(color) {
+    let data = {
+        peer_name: peer_name,
+        action: 'bgcolor',
+        color: color,
+    };
+    whiteboardAction(data);
+}
+
+function whiteboardIsDrawingMode(status) {
+    wbCanvas.isDrawingMode = status;
+    if (status) {
+        setColor(whiteboardPencilBtn, 'green');
+        setColor(whiteboardVanishingBtn, 'white');
+        setColor(whiteboardObjectBtn, 'white');
+        setColor(whiteboardEraserBtn, 'white');
+        wbIsEraser = false;
+        wbIsVanishing = false;
+    } else {
+        setColor(whiteboardPencilBtn, 'white');
+        setColor(whiteboardVanishingBtn, 'white');
+        setColor(whiteboardObjectBtn, 'green');
+    }
+}
+
+function whiteboardIsVanishingMode(status) {
+    wbCanvas.isDrawingMode = status;
+    wbIsVanishing = status;
+    if (status) {
+        setColor(whiteboardVanishingBtn, 'green');
+        setColor(whiteboardPencilBtn, 'white');
+        setColor(whiteboardObjectBtn, 'white');
+        setColor(whiteboardEraserBtn, 'white');
+        wbIsEraser = false;
+    } else {
+        setColor(whiteboardVanishingBtn, 'white');
+    }
+}
+
+function whiteboardIsEraser(status) {
+    whiteboardIsDrawingMode(false);
+    wbIsEraser = status;
+    setColor(whiteboardEraserBtn, wbIsEraser ? 'green' : 'white');
+}
+
+function whiteboardAddObj(type) {
+    switch (type) {
+        case 'imgUrl':
+            Swal.fire({
+                background: swalBackground,
+                title: 'Image URL',
+                input: 'text',
+                showCancelButton: true,
+                confirmButtonText: 'OK',
+                showClass: { popup: 'animate__animated animate__fadeInDown' },
+                hideClass: { popup: 'animate__animated animate__fadeOutUp' },
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    let wbCanvasImgURL = result.value;
+                    if (isImageURL(wbCanvasImgURL)) {
+                        fabric.Image.fromURL(wbCanvasImgURL, function (myImg) {
+                            addWbCanvasObj(myImg);
+                        });
+                    } else {
+                        userLog('error', 'The URL is not a valid image', 'top-end');
+                    }
+                }
+            });
+            break;
+        case 'imgFile':
+            setupFileSelection('Select the image', wbImageInput, renderImageToCanvas);
+            break;
+        case 'pdfFile':
+            setupFileSelection('Select the PDF', wbPdfInput, renderPdfToCanvas);
+            break;
+        case 'text':
+            const text = new fabric.IText('Lorem Ipsum', {
+                top: 0,
+                left: 0,
+                fontFamily: 'Montserrat',
+                fill: wbCanvas.freeDrawingBrush.color,
+                strokeWidth: wbCanvas.freeDrawingBrush.width,
+                stroke: wbCanvas.freeDrawingBrush.color,
+            });
+            addWbCanvasObj(text);
+            break;
+        case 'stickyNote':
+            createStickyNote();
+            break;
+        case 'line':
+            const line = new fabric.Line([50, 100, 200, 200], {
+                top: 0,
+                left: 0,
+                fill: wbCanvas.freeDrawingBrush.color,
+                strokeWidth: wbCanvas.freeDrawingBrush.width,
+                stroke: wbCanvas.freeDrawingBrush.color,
+            });
+            addWbCanvasObj(line);
+            break;
+        case 'circle':
+            const circle = new fabric.Circle({
+                radius: 50,
+                fill: 'transparent',
+                stroke: wbCanvas.freeDrawingBrush.color,
+                strokeWidth: wbCanvas.freeDrawingBrush.width,
+            });
+            addWbCanvasObj(circle);
+            break;
+        case 'rect':
+            const rect = new fabric.Rect({
+                top: 0,
+                left: 0,
+                width: 150,
+                height: 100,
+                fill: 'transparent',
+                stroke: wbCanvas.freeDrawingBrush.color,
+                strokeWidth: wbCanvas.freeDrawingBrush.width,
+            });
+            addWbCanvasObj(rect);
+            break;
+        case 'triangle':
+            const triangle = new fabric.Triangle({
+                top: 0,
+                left: 0,
+                width: 150,
+                height: 100,
+                fill: 'transparent',
+                stroke: wbCanvas.freeDrawingBrush.color,
+                strokeWidth: wbCanvas.freeDrawingBrush.width,
+            });
+            addWbCanvasObj(triangle);
+            break;
+        default:
+            break;
+    }
+}
+
+function whiteboardEraseObject() {
+    if (wbCanvas && typeof wbCanvas.getActiveObjects === 'function') {
+        const activeObjects = wbCanvas.getActiveObjects();
+        if (activeObjects && activeObjects.length > 0) {
+            // Remove all selected objects
+            activeObjects.forEach((obj) => {
+                wbCanvas.remove(obj);
+            });
+            wbCanvas.discardActiveObject();
+            wbCanvas.requestRenderAll();
+            wbCanvasToJson();
+        }
+    }
+}
+
+function whiteboardCloneObject() {
+    if (wbCanvas && typeof wbCanvas.getActiveObjects === 'function') {
+        const activeObjects = wbCanvas.getActiveObjects();
+        if (activeObjects && activeObjects.length > 0) {
+            activeObjects.forEach((obj, idx) => {
+                obj.clone((cloned) => {
+                    // Offset each clone for visibility
+                    cloned.set({
+                        left: obj.left + 30 + idx * 10,
+                        top: obj.top + 30 + idx * 10,
+                        evented: true,
+                    });
+                    wbCanvas.add(cloned);
+                    wbCanvas.setActiveObject(cloned);
+                    wbCanvasToJson();
+                });
+            });
+            wbCanvas.requestRenderAll();
+        }
+    }
+}
+
+function wbHandleVanishingObjects() {
+    if (wbIsVanishing && wbCanvas._objects.length > 0) {
+        const obj = wbCanvas._objects[wbCanvas._objects.length - 1];
+        if (obj && obj.type === 'path') {
+            wbVanishingObjects.push(obj);
+            const fadeDuration = 1000,
+                vanishTimeout = 5000;
+            setTimeout(() => {
+                const start = performance.now();
+                function fade(ts) {
+                    const p = Math.min((ts - start) / fadeDuration, 1);
+                    obj.set('opacity', 1 - p);
+                    wbCanvas.requestRenderAll();
+                    if (p < 1) requestAnimationFrame(fade);
+                }
+                requestAnimationFrame(fade);
+            }, vanishTimeout - fadeDuration);
+            setTimeout(() => {
+                wbCanvas.remove(obj);
+                wbCanvas.renderAll();
+                wbCanvasToJson();
+                wbVanishingObjects.splice(wbVanishingObjects.indexOf(obj), 1);
+            }, vanishTimeout);
+        }
+    }
+}
+
+function createStickyNote() {
+    Swal.fire({
+        background: swalBackground,
+        title: 'Create Sticky Note',
+        html: `
+        <div class="sticky-note-form">
+            <textarea id="stickyNoteText" class="sticky-note-textarea" rows="4" placeholder="Type your note here...">Note</textarea>
+            <div class="sticky-note-colors-row">
+                <div class="sticky-note-color-group">
+                    <label for="stickyNoteColor" class="sticky-note-color-label">
+                        <i class="fas fa-palette"></i> Background
+                    </label>
+                    <input id="stickyNoteColor" type="color" value="#FFEB3B" class="sticky-note-color-input">
+                </div>
+                <div class="sticky-note-color-group">
+                    <label for="stickyNoteTextColor" class="sticky-note-color-label">
+                        <i class="fas fa-font"></i> Text
+                    </label>
+                    <input id="stickyNoteTextColor" type="color" value="#000000" class="sticky-note-color-input">
+                </div>
+            </div>
+        </div>
+        `,
+        showCancelButton: true,
+        confirmButtonText: 'Create',
+        cancelButtonText: 'Cancel',
+        showClass: { popup: 'animate__animated animate__fadeInDown' },
+        hideClass: { popup: 'animate__animated animate__fadeOutUp' },
+        preConfirm: () => {
+            return {
+                text: getId('stickyNoteText').value,
+                color: getId('stickyNoteColor').value,
+                textColor: getId('stickyNoteTextColor').value,
+            };
+        },
+        didOpen: () => {
+            // Focus textarea for quick typing
+            setTimeout(() => {
+                getId('stickyNoteText').focus();
+            }, 100);
+        },
+    }).then((result) => {
+        if (result.isConfirmed) {
+            const noteData = result.value;
+
+            // Create sticky note background (rectangle)
+            const noteRect = new fabric.Rect({
+                left: 100,
+                top: 100,
+                width: 220,
+                height: 160,
+                fill: noteData.color,
+                shadow: 'rgba(0,0,0,0.18) 0px 4px 12px',
+                rx: 14,
+                ry: 14,
+            });
+
+            // Create text for sticky note
+            const noteText = new fabric.Textbox(noteData.text, {
+                left: 110,
+                top: 110,
+                width: 200,
+                fontSize: 18,
+                fontFamily: 'Segoe UI, Arial, sans-serif',
+                fill: noteData.textColor,
+                textAlign: 'left',
+                editable: true,
+                fontWeight: 'bold',
+                shadow: new fabric.Shadow({
+                    color: 'rgba(255,255,255,0.18)',
+                    blur: 2,
+                    offsetX: 1,
+                    offsetY: 1,
+                }),
+                padding: 8,
+                cornerSize: 8,
+            });
+
+            // Group rectangle and text together
+            const stickyNoteGroup = new fabric.Group([noteRect, noteText], {
+                left: 100,
+                top: 100,
+                selectable: true,
+                hasControls: true,
+                hoverCursor: 'pointer',
+            });
+
+            // Make the text editable by handling double-click events
+            stickyNoteGroup.on('mousedblclick', function () {
+                noteText.enterEditing();
+                noteText.hiddenTextarea && noteText.hiddenTextarea.focus();
+            });
+
+            // Exit editing when clicking outside the noteText
+            wbCanvas.on('mouse:down', function (e) {
+                if (noteText.isEditing && e.target !== noteText) {
+                    noteText.exitEditing();
+                }
+            });
+
+            addWbCanvasObj(stickyNoteGroup);
+        }
+    });
+}
+
+function setupFileSelection(title, accept, renderToCanvas) {
+    Swal.fire({
+        allowOutsideClick: false,
+        background: swalBackground,
+        position: 'center',
+        title: title,
+        input: 'file',
+        html: `
+        <div id="dropArea">
+            <p>Drag and drop your file here</p>
+        </div>
+        `,
+        inputAttributes: {
+            accept: accept,
+            'aria-label': title,
+        },
+        didOpen: () => {
+            const dropArea = document.getElementById('dropArea');
+            dropArea.addEventListener('dragenter', handleDragEnter);
+            dropArea.addEventListener('dragover', handleDragOver);
+            dropArea.addEventListener('dragleave', handleDragLeave);
+            dropArea.addEventListener('drop', handleDrop);
+        },
+        showDenyButton: true,
+        confirmButtonText: `OK`,
+        denyButtonText: `Cancel`,
+        showClass: { popup: 'animate__animated animate__fadeInDown' },
+        hideClass: { popup: 'animate__animated animate__fadeOutUp' },
+    }).then((result) => {
+        if (result.isConfirmed) {
+            renderToCanvas(result.value);
+        }
+    });
+
+    function handleDragEnter(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.target.style.background = 'var(--body-bg)';
+    }
+
+    function handleDragOver(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.dataTransfer.dropEffect = 'copy';
+    }
+
+    function handleDragLeave(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.target.style.background = '';
+    }
+
+    function handleDrop(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        const dt = e.dataTransfer;
+        const files = dt.files;
+        handleFiles(files);
+        e.target.style.background = '';
+    }
+
+    function handleFiles(files) {
+        if (files.length > 0) {
+            const file = files[0];
+            console.log('Selected file:', file);
+            Swal.close();
+            renderToCanvas(file);
+        }
+    }
+}
+
+function renderImageToCanvas(wbCanvasImg) {
+    if (wbCanvasImg && wbCanvasImg.size > 0) {
+        let reader = new FileReader();
+        reader.onload = function (event) {
+            let imgObj = new Image();
+            imgObj.src = event.target.result;
+            imgObj.onload = function () {
+                let image = new fabric.Image(imgObj);
+                image.set({ top: 0, left: 0 }).scale(0.3);
+                addWbCanvasObj(image);
+            };
+        };
+        reader.readAsDataURL(wbCanvasImg);
+    }
+}
+
+async function renderPdfToCanvas(wbCanvasPdf) {
+    if (wbCanvasPdf && wbCanvasPdf.size > 0) {
+        let reader = new FileReader();
+        reader.onload = async function (event) {
+            wbCanvas.requestRenderAll();
+            await pdfToImage(event.target.result, wbCanvas);
+            whiteboardIsDrawingMode(false);
+            wbCanvasToJson();
+        };
+        reader.readAsDataURL(wbCanvasPdf);
+    }
+}
+
+function readBlob(blob) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.addEventListener('load', () => resolve(reader.result));
+        reader.addEventListener('error', reject);
+        reader.readAsDataURL(blob);
+    });
+}
+
+async function loadPDF(pdfData, pages) {
+    const pdfjsLib = window['pdfjs-dist/build/pdf'];
+    pdfData = pdfData instanceof Blob ? await readBlob(pdfData) : pdfData;
+    const data = atob(pdfData.startsWith(Base64Prefix) ? pdfData.substring(Base64Prefix.length) : pdfData);
+    try {
+        const pdf = await pdfjsLib.getDocument({ data }).promise;
+        const numPages = pdf.numPages;
+        const canvases = await Promise.all(
+            Array.from({ length: numPages }, (_, i) => {
+                const pageNumber = i + 1;
+                if (pages && pages.indexOf(pageNumber) === -1) return null;
+                return pdf.getPage(pageNumber).then(async (page) => {
+                    const viewport = page.getViewport({ scale: window.devicePixelRatio });
+                    const canvas = document.createElement('canvas');
+                    const context = canvas.getContext('2d');
+                    canvas.height = viewport.height;
+                    canvas.width = viewport.width;
+                    const renderContext = {
+                        canvasContext: context,
+                        viewport: viewport,
+                    };
+                    await page.render(renderContext).promise;
+                    return canvas;
+                });
+            })
+        );
+        return canvases.filter((canvas) => canvas !== null);
+    } catch (error) {
+        console.error('Error loading PDF', error.message);
+        throw error.message;
+    }
+}
+
+async function pdfToImage(pdfData, canvas) {
+    const scale = 1 / window.devicePixelRatio;
+    try {
+        const canvases = await loadPDF(pdfData);
+        canvases.forEach(async (c) => {
+            canvas.add(
+                new fabric.Image(await c, {
+                    scaleX: scale,
+                    scaleY: scale,
+                })
+            );
+        });
+    } catch (error) {
+        console.error('Error converting PDF to images', error.message);
+        throw error.message;
+    }
+}
+
+function addWbCanvasObj(obj) {
+    if (obj) {
+        wbCanvas.add(obj).setActiveObject(obj);
+        whiteboardIsDrawingMode(false);
+        wbCanvasToJson();
+    } else {
+        console.error('Invalid input. Expected an obj of canvas elements');
+    }
+}
+
+function setupWhiteboardLocalListeners() {
+    wbCanvas.on('mouse:down', function (e) {
+        mouseDown(e);
+    });
+    wbCanvas.on('mouse:up', function () {
+        mouseUp();
+    });
+    wbCanvas.on('mouse:move', function () {
+        mouseMove();
+    });
+    wbCanvas.on('object:added', function () {
+        objectAdded();
+    });
+}
+
+function mouseDown(e) {
+    wbIsDrawing = true;
+    if (wbIsEraser && e.target) {
+        if (!wbVanishingObjects.includes(e.target)) {
+            wbPop.push(e.target); // To allow redo
+        }
+        wbCanvas.remove(e.target);
+        return;
+    }
+}
+
+function mouseUp() {
+    wbIsDrawing = false;
+    wbCanvasToJson();
+}
+
+function mouseMove() {
+    if (wbIsEraser) {
+        wbCanvas.hoverCursor = 'not-allowed';
+        return;
+    } else {
+        wbCanvas.hoverCursor = 'move';
+    }
+    if (!wbIsDrawing) return;
+}
+
+function objectAdded() {
+    if (!wbIsRedoing) wbPop = [];
+    wbIsRedoing = false;
+    wbHandleVanishingObjects();
+}
+
+function wbCanvasBackgroundColor(color) {
+    document.documentElement.style.setProperty('--wb-bg', color);
+    wbBackgroundColorEl.value = color;
+    wbCanvas.setBackgroundColor(color);
+    wbCanvas.renderAll();
+}
+
+function wbCanvasUndo() {
+    if (wbCanvas._objects.length > 0) {
+        const obj = wbCanvas._objects.pop();
+        if (!wbVanishingObjects.includes(obj)) {
+            wbPop.push(obj);
+        }
+        wbCanvas.renderAll();
+    }
+}
+
+function wbCanvasRedo() {
+    if (wbPop.length > 0) {
+        wbIsRedoing = true;
+        wbCanvas.add(wbPop.pop());
+    }
+}
+
+function wbCanvasClear() {
+    wbCanvas.clear();
+    wbCanvas.renderAll();
+}
+
+function wbCanvasSaveImg() {
+    const dataURL = wbCanvas.toDataURL({
+        width: wbCanvas.getWidth(),
+        height: wbCanvas.getHeight(),
+        left: 0,
+        top: 0,
+        format: 'png',
+    });
+    const dataNow = getDataTimeString();
+    const fileName = `whiteboard-${dataNow}.png`;
+    saveDataToFile(dataURL, fileName);
+}
+
+function wbUpdate() {
+    if (wbIsOpen && (!isRulesActive || isPresenter)) {
+        console.log('IsPresenter: update whiteboard canvas to the participants in the room');
+        wbCanvasToJson();
+        whiteboardAction(getWhiteboardAction(wbIsLock ? 'lock' : 'unlock'));
+    }
+}
+
+function wbCanvasToJson() {
+    console.log('wbCanvasToJson called');
+    if (!isPresenter && wbIsLock) {
+        console.log('Not presenter and whiteboard is locked. Exiting');
+        return;
+    }
+    if (!rc.thereAreParticipants()) {
+        console.log('No participants. Exiting');
+        return;
+    }
+    let wbCanvasJson = JSON.stringify(wbCanvas.toJSON());
+    console.log('Emitting wbCanvasToJson');
+    rc.socket.emit('wbCanvasToJson', wbCanvasJson);
+}
+
+function JsonToWbCanvas(json) {
+    if (!wbIsOpen) toggleWhiteboard();
+    wbIsRedoing = true;
+    wbCanvas.loadFromJSON(json, function () {
+        setupWhiteboardCanvasSize();
+        wbIsRedoing = false;
+    });
+    if (!isPresenter && !wbCanvas.isDrawingMode && wbIsLock) {
+        wbDrawing(false);
+    }
+}
+
+function getWhiteboardAction(action) {
+    return {
+        peer_name: peer_name,
+        action: action,
+    };
+}
+
+function confirmClearBoard() {
+    Swal.fire({
+        background: swalBackground,
+        imageUrl: image.delete,
+        position: 'top',
+        title: 'Clean the board',
+        text: 'Are you sure you want to clean the board?',
+        showDenyButton: true,
+        confirmButtonText: `Yes`,
+        denyButtonText: `No`,
+        showClass: { popup: 'animate__animated animate__fadeInDown' },
+        hideClass: { popup: 'animate__animated animate__fadeOutUp' },
+    }).then((result) => {
+        if (result.isConfirmed) {
+            whiteboardAction(getWhiteboardAction('clear'));
+            sound('delete');
+        }
+    });
+}
+
+function showWhiteboardShortcuts() {
+    const whiteboardShortcutsContent = getId('whiteboardShortcutsContent');
+    if (!whiteboardShortcutsContent) {
+        console.error('Whiteboard shortcuts content not found');
+        return;
+    }
+    Swal.fire({
+        background: swalBackground,
+        position: 'center',
+        title: 'Whiteboard Shortcuts',
+        html: whiteboardShortcutsContent.innerHTML,
+        confirmButtonText: 'Got it!',
+        showClass: { popup: 'animate__animated animate__fadeInDown' },
+        hideClass: { popup: 'animate__animated animate__fadeOutUp' },
+    });
+}
+
+function toggleLockUnlockWhiteboard() {
+    wbIsLock = !wbIsLock;
+
+    const btnToShow = wbIsLock ? whiteboardLockBtn : whiteboardUnlockBtn;
+    const btnToHide = wbIsLock ? whiteboardUnlockBtn : whiteboardLockBtn;
+    const btnColor = wbIsLock ? 'red' : 'white';
+    const action = wbIsLock ? 'lock' : 'unlock';
+
+    show(btnToShow);
+    hide(btnToHide);
+    setColor(whiteboardLockBtn, btnColor);
+
+    whiteboardAction(getWhiteboardAction(action));
+
+    if (wbIsLock) {
+        userLog('info', 'The whiteboard is locked. \n The participants cannot interact with it.', 'top-right');
+        sound('locked');
+    }
+}
+
+function whiteboardAction(data, emit = true) {
+    if (emit) {
+        if (rc.thereAreParticipants()) {
+            rc.socket.emit('whiteboardAction', data);
+        }
+    } else {
+        userLog(
+            'info',
+            `${data.peer_name} <i class="fas fa-chalkboard-teacher"></i> whiteboard action: ${data.action}`,
+            'top-end'
+        );
+    }
+
+    switch (data.action) {
+        case 'bgcolor':
+            wbCanvasBackgroundColor(data.color);
+            break;
+        case 'undo':
+            wbCanvasUndo();
+            break;
+        case 'redo':
+            wbCanvasRedo();
+            break;
+        case 'clear':
+            wbCanvasClear();
+            removeCanvasGrid();
+            break;
+        case 'lock':
+            if (!isPresenter) {
+                elemDisplay('whiteboardTitle', false);
+                elemDisplay('whiteboardOptions', false);
+                elemDisplay('whiteboardButton', false);
+                wbDrawing(false);
+                wbIsLock = true;
+            }
+            break;
+        case 'unlock':
+            if (!isPresenter) {
+                elemDisplay('whiteboardTitle', true, 'flex');
+                elemDisplay('whiteboardOptions', true, 'inline');
+                elemDisplay('whiteboardButton', true);
+                wbDrawing(true);
+                wbIsLock = false;
+            }
+            break;
+        case 'close':
+            if (wbIsOpen) {
+                toggleWhiteboard();
+                if (BUTTONS.main.extraButton) {
+                    show(toggleExtraButton);
+                }
+            }
+            break;
+        default:
+            break;
+        //...
+    }
+}
+
+function wbDrawing(status) {
+    wbCanvas.isDrawingMode = status; // Disable free drawing
+    wbCanvas.selection = status; // Disable object selection
+    wbCanvas.forEachObject(function (obj) {
+        obj.selectable = status; // Make all objects unselectable
+    });
+}
+
+// ####################################################
+// HANDLE WHITEBOARD DRAG AND DROP
+// ####################################################
+
+function setupWhiteboardDragAndDrop() {
+    if (!wbCanvas) return;
+
+    // Prevent default drag behaviors
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach((eventName) => {
+        wbCanvas.upperCanvasEl.addEventListener(eventName, preventDefaults, false);
+    });
+
+    function preventDefaults(e) {
+        e.preventDefault();
+        e.stopPropagation();
+    }
+
+    // Highlight drop area
+    ['dragenter', 'dragover'].forEach((eventName) => {
+        wbCanvas.upperCanvasEl.addEventListener(
+            eventName,
+            () => {
+                wbCanvas.upperCanvasEl.style.border = '1px dashed #fff';
+            },
+            false
+        );
+    });
+
+    ['dragleave', 'drop'].forEach((eventName) => {
+        wbCanvas.upperCanvasEl.addEventListener(
+            eventName,
+            () => {
+                wbCanvas.upperCanvasEl.style.border = '';
+            },
+            false
+        );
+    });
+
+    // Handle dropped files
+    wbCanvas.upperCanvasEl.addEventListener('drop', handleWhiteboardDrop, false);
+}
+
+function handleWhiteboardDrop(e) {
+    const dt = e.dataTransfer;
+    const files = dt.files;
+
+    if (files.length === 0) return;
+
+    const file = files[0];
+    const fileType = file.type;
+
+    switch (true) {
+        case fileType.startsWith('image/'):
+            renderImageToCanvas(file);
+            break;
+        case fileType === 'application/pdf':
+            renderPdfToCanvas(file);
+            break;
+        default:
+            userLog('warning', `Unsupported file type: ${fileType}. Please drop an image or PDF file.`, 'top-end');
+            break;
+    }
+}
+
+// ####################################################
+// HANDLE WHITEBOARD SHORTCUTS
+// ####################################################
+
+function setupWhiteboardShortcuts() {
+    document.addEventListener('keydown', (event) => {
+        if (!wbIsOpen) return;
+
+        // Whiteboard clone shortcut: Cmd+C/Ctrl+C
+        if ((event.key === 'c' || event.key === 'C') && (event.ctrlKey || event.metaKey)) {
+            whiteboardCloneObject();
+            event.preventDefault();
+            return;
+        }
+        // Whiteboard erase shortcut: Cmd+X/Ctrl+X
+        if ((event.key === 'x' || event.key === 'X') && (event.ctrlKey || event.metaKey)) {
+            whiteboardEraseObject();
+            event.preventDefault();
+            return;
+        }
+
+        // Whiteboard undo shortcuts: Cmd+Z/Ctrl+Z
+        if ((event.key === 'z' || event.key === 'Z') && (event.ctrlKey || event.metaKey) && !event.shiftKey) {
+            whiteboardAction(getWhiteboardAction('undo'));
+            event.preventDefault();
+            return;
+        }
+        // Whiteboard Redo shortcuts: Cmd+Shift+Z/Ctrl+Shift+Z or Cmd+Y/Ctrl+Y
+        if (
+            ((event.key === 'z' || event.key === 'Z') && (event.ctrlKey || event.metaKey) && event.shiftKey) ||
+            ((event.key === 'y' || event.key === 'Y') && (event.ctrlKey || event.metaKey))
+        ) {
+            whiteboardAction(getWhiteboardAction('redo'));
+            event.preventDefault();
+            return;
+        }
+
+        // Use event.code and check for Alt+Meta (Mac) or Alt+Ctrl (Windows/Linux)
+        if (event.code && event.altKey && (event.ctrlKey || event.metaKey) && !event.shiftKey) {
+            switch (event.code) {
+                case 'KeyT': // Text
+                    whiteboardAddObj('text');
+                    event.preventDefault();
+                    break;
+                case 'KeyL': // Line
+                    whiteboardAddObj('line');
+                    event.preventDefault();
+                    break;
+                case 'KeyC': // Circle
+                    whiteboardAddObj('circle');
+                    event.preventDefault();
+                    break;
+                case 'KeyR': // Rectangle
+                    whiteboardAddObj('rect');
+                    event.preventDefault();
+                    break;
+                case 'KeyG': // Triangle (G for Geometry)
+                    whiteboardAddObj('triangle');
+                    event.preventDefault();
+                    break;
+                case 'KeyN': // Sticky Note
+                    whiteboardAddObj('stickyNote');
+                    event.preventDefault();
+                    break;
+                case 'KeyU': // Image (from URL)
+                    whiteboardAddObj('imgUrl');
+                    event.preventDefault();
+                    break;
+                case 'KeyV': // Vanishing Pen
+                    whiteboardIsVanishingMode(!wbIsVanishing);
+                    event.preventDefault();
+                    break;
+                case 'KeyI': // Image (from file)
+                    whiteboardAddObj('imgFile');
+                    event.preventDefault();
+                    break;
+                case 'KeyP': // PDF (from file)
+                    whiteboardAddObj('pdfFile');
+                    event.preventDefault();
+                    break;
+                case 'KeyQ': // Clear Board
+                    confirmClearBoard();
+                    event.preventDefault();
+                    break;
+                default:
+                    break;
+            }
+        }
+    });
+}
+
+// ####################################################
+// HANDLE PARTICIPANTS
+// ####################################################
+
+async function getRemotePeerInfo(peer_id) {
+    const peers = await getRoomPeers();
+    for (let peer of Array.from(peers.keys()).filter((id) => id === peer_id)) {
+        return peers.get(peer).peer_info;
+    }
+    return false;
+}
+
+async function getRoomPeers() {
+    let room_info = await rc.getRoomInfo();
+    return new Map(JSON.parse(room_info.peers));
+}
+
+async function saveRoomPeers() {
+    const peers = await getRoomPeers();
+    let peersToSave = [];
+    for (let peer of Array.from(peers.keys())) {
+        peersToSave.push(peers.get(peer).peer_info);
+    }
+    saveObjToJsonFile(peersToSave, 'PARTICIPANTS');
+}
+
+async function getRoomParticipants() {
+    const peers = await getRoomPeers();
+    const lists = getParticipantsList(peers);
+    participantsCount = peers.size;
+    participantsList.innerHTML = lists;
+    handleDropdownHover(participantsList.querySelectorAll('.dropdown'));
+    refreshParticipantsCount(participantsCount, false);
+    setParticipantsTippy(peers);
+    console.log('*** Refresh Chat participant lists ***');
+}
+
+function getParticipantsList(peers) {
+    let li = '';
+
+    const chatGPT = BUTTONS.chat.chatGPT !== undefined ? BUTTONS.chat.chatGPT : true;
+
+    // CHAT-GPT
+    if (chatGPT) {
+        const chatgpt_active = rc.chatPeerName === 'ChatGPT' ? ' active' : '';
+
+        li = `
+        <li 
+            id="ChatGPT" 
+            data-to-id="ChatGPT"
+            data-to-name="ChatGPT"
+            class="clearfix${chatgpt_active}" 
+            onclick="rc.showPeerAboutAndMessages(this.id, 'ChatGPT', '', event)"
+        >
+            <img 
+                src="${image.chatgpt}"
+                alt="avatar"
+            />
+            <div class="about">
+                <div class="name">ChatGPT</div>
+                <div class="status"><i class="fa fa-circle online"></i> online</div>
+            </div>
+        </li>`;
+    }
+
+    const deepSeek = BUTTONS.chat.deepSeek !== undefined ? BUTTONS.chat.deepSeek : true;
+
+    // DEEP-SEEK
+    if (deepSeek) {
+        const deepSeek_active = rc.chatPeerName === 'DeepSeek' ? ' active' : '';
+
+        li += `
+        <li 
+            id="DeepSeek" 
+            data-to-id="DeepSeek"
+            data-to-name="DeepSeek"
+            class="clearfix${deepSeek_active}" 
+            onclick="rc.showPeerAboutAndMessages(this.id, 'DeepSeek', '', event)"
+        >
+            <img 
+                src="${image.deepSeek}"
+                alt="avatar"
+            />
+            <div class="about">
+                <div class="name">DeepSeek</div>
+                <div class="status"><i class="fa fa-circle online"></i> online</div>
+            </div>
+        </li>`;
+    }
+
+    const public_chat_active = rc.chatPeerName === 'all' ? ' active' : '';
+
+    // ALL
+    li += `
+    <li id="all"
+        data-to-id="all"
+        data-to-name="all"
+        class="clearfix${public_chat_active}" 
+        onclick="rc.showPeerAboutAndMessages(this.id, 'all', '', event)"
+    >
+        <img 
+            src="${image.all}"
+            alt="avatar"
+        />
+        <div class="about">
+            <div class="name">Public chat</div>
+            <div class="status"> <i class="fa fa-circle online"></i> online ${participantsCount}</div>
+        </div>`;
+
+    // ONLY PRESENTER CAN EXECUTE THIS CMD
+    if (!isRulesActive || isPresenter) {
+        li += `
+        <div class="dropdown">
+            <button 
+                class="dropdown-toggle" 
+                type="button" 
+                id="${socket.id}-chatDropDownMenu" 
+                data-bs-toggle="dropdown" 
+                aria-expanded="false"
+                style="float: right"
+            >
+            <i class="fas fa-bars"></i>
+            </button>
+            <ul class="dropdown-menu text-start" aria-labelledby="${socket.id}-chatDropDownMenu">`;
+
+        li += `<li><button class="ml5" id="muteAllParticipantsButton" onclick="rc.peerAction('me','${socket.id}','mute',true,true)">${_PEER.audioOff} Mute all participants</button></li>`;
+        li += `<li><button class="ml5" id="hideAllParticipantsButton" onclick="rc.peerAction('me','${socket.id}','hide',true,true)">${_PEER.videoOff} Hide all participants</button></li>`;
+        li += `<li><button class="ml5" id="stopAllParticipantsButton" onclick="rc.peerAction('me','${socket.id}','stop',true,true)">${_PEER.screenOff} Stop all screens sharing</button></li>`;
+
+        if (BUTTONS.participantsList.sendFileAllButton) {
+            li += `<li><button class="btn-sm ml5" id="sendAllButton" onclick="rc.selectFileToShare('${socket.id}', true)">${_PEER.sendFile} Share file to all</button></li>`;
+        }
+
+        li += `<li><button class="btn-sm ml5" id="sendVideoToAll" onclick="rc.shareVideo('all');">${_PEER.sendVideo} Share audio/video to all</button></li>`;
+
+        if (BUTTONS.participantsList.ejectAllButton) {
+            li += `<li><button class="btn-sm ml5" id="ejectAllButton" onclick="rc.peerAction('me','${socket.id}','eject',true,true)">${_PEER.ejectPeer} Eject all participants</button></li>`;
+        }
+
+        li += `</ul>
+        </div>
+
+        <br/>
+
+        <div class="about-buttons mt5">
+            <button class="ml5" id="muteAllButton" onclick="rc.peerAction('me','${socket.id}','mute',true,true)">${_PEER.audioOff}</button>
+            <button class="ml5" id="hideAllButton" onclick="rc.peerAction('me','${socket.id}','hide',true,true)">${_PEER.videoOff}</button>
+            <button class="ml5" id="stopAllButton" onclick="rc.peerAction('me','${socket.id}','stop',true,true)">${_PEER.screenOff}</button>
+        </div>`;
+    }
+
+    li += `
+    </li>
+    `;
+
+    // PEERS IN THE CURRENT ROOM
+    for (const peer of Array.from(peers.keys())) {
+        const peer_info = peers.get(peer).peer_info;
+        console.log('PEER-INFO------->', peer_info);
+        const peer_name = peer_info.peer_name;
+        const peer_avatar = peer_info.peer_avatar;
+        const peer_name_limited = peer_name.length > 15 ? peer_name.substring(0, 10) + '*****' : peer_name;
+        //const peer_presenter = peer_info.peer_presenter ? _PEER.presenter : _PEER.guest;
+        const peer_audio = peer_info.peer_audio ? _PEER.audioOn : _PEER.audioOff;
+        const peer_video = peer_info.peer_video ? _PEER.videoOn : _PEER.videoOff;
+        const peer_screen = peer_info.peer_screen ? _PEER.screenOn : _PEER.screenOff;
+        const peer_hand = peer_info.peer_hand ? _PEER.raiseHand : _PEER.lowerHand;
+        const peer_ban = _PEER.banPeer;
+        const peer_eject = _PEER.ejectPeer;
+        const peer_geoLocation = _PEER.geoLocation;
+        const peer_sendFile = _PEER.sendFile;
+        const peer_id = peer_info.peer_id;
+        const avatarImg = getParticipantAvatar(peer_name, peer_avatar);
+
+        const peer_chat_active = rc.chatPeerId === peer_id ? ' active' : '';
+
+        // NOT ME
+        if (socket.id !== peer_id) {
+            // PRESENTER HAS MORE OPTIONS
+            if (isRulesActive && isPresenter) {
+                li += `
+                <li 
+                    id='${peer_id}'
+                    data-to-id="${peer_id}" 
+                    data-to-name="${peer_name}"
+                    class="clearfix${peer_chat_active}" 
+                    onclick="rc.showPeerAboutAndMessages(this.id, '${peer_name}', '${peer_avatar}', event)"
+                >
+                    <img
+                        src="${avatarImg}"
+                        alt="avatar" 
+                    />
+                    <div class="about">
+                        <div class="name">${peer_name_limited}</div>
+                        <div class="status"> <i class="fa fa-circle online"></i> online <i id="${peer_id}-unread-msg" class="fas fa-comments hidden"></i> </div>
+                    </div>
+
+                    <div class="dropdown">
+                        <button 
+                            class="dropdown-toggle" 
+                            type="button" 
+                            id="${peer_id}-chatDropDownMenu" 
+                            data-bs-toggle="dropdown" 
+                            aria-expanded="false"
+                            style="float: right"
+                        >
+                        <i class="fas fa-bars"></i>
+                        </button>
+                        <ul class="dropdown-menu text-start" aria-labelledby="${peer_id}-chatDropDownMenu">`;
+
+                li += `<li><button class="ml5" id='${peer_id}___pAudioMute' onclick="rc.peerAction('me',this.id,'mute')">${_PEER.audioOn} Toggle audio</button></li>`;
+                li += `<li><button class="ml5" id='${peer_id}___pVideoHide' onclick="rc.peerAction('me',this.id,'hide')">${_PEER.videoOn} Toggle video</button></li>`;
+                li += `<li><button class="ml5" id='${peer_id}___pScreenStop' onclick="rc.peerAction('me',this.id,'stop')">${_PEER.screenOn} Toggle screen</button></li>`;
+
+                if (BUTTONS.participantsList.sendFileButton) {
+                    li += `<li><button class="btn-sm ml5" id='${peer_id}___shareFile' onclick="rc.selectFileToShare('${peer_id}', false)">${peer_sendFile} Share file</button></li>`;
+                }
+
+                li += `<li><button class="btn-sm ml5" id="${peer_id}___sendVideoTo" onclick="rc.shareVideo('${peer_id}');">${_PEER.sendVideo} Share audio/video</button></li>`;
+
+                if (BUTTONS.participantsList.geoLocationButton) {
+                    li += `<li><button class="btn-sm ml5" id='${peer_id}___geoLocation' onclick="rc.askPeerGeoLocation(this.id)">${peer_geoLocation} Get geolocation</button></li>`;
+                }
+                if (BUTTONS.participantsList.banButton) {
+                    li += `<li><button class="btn-sm ml5" id='${peer_id}___pBan' onclick="rc.peerAction('me',this.id,'ban')">${peer_ban} Ban participant</button></li>`;
+                }
+                if (BUTTONS.participantsList.ejectButton) {
+                    li += `<li><button class="btn-sm ml5" id='${peer_id}___pEject' onclick="rc.peerAction('me',this.id,'eject')">${peer_eject} Eject participant</button></li>`;
+                }
+
+                li += `</ul>
+                    </div>
+
+                    <br/>
+
+                    <div class="about-buttons mt5"> 
+                        <button class="ml5" id='${peer_id}___pAudio' onclick="rc.peerAction('me',this.id,'mute')">${peer_audio}</button>
+                        <button class="ml5" id='${peer_id}___pVideo' onclick="rc.peerAction('me',this.id,'hide')">${peer_video}</button>
+                        <button class="ml5" id='${peer_id}___pScreen' onclick="rc.peerAction('me',this.id,'stop')">${peer_screen}</button>
+                `;
+
+                // li += `
+                //         <button class="ml5" >${peer_presenter}</button>`;
+
+                if (peer_info.peer_hand) {
+                    li += `
+                        <button class="ml5" >${peer_hand}</button>`;
+                }
+
+                li += ` 
+                    </div>
+                </li>
+                `;
+            } else {
+                // GUEST USER
+                li += `
+                <li 
+                    id='${peer_id}' 
+                    data-to-id="${peer_id}"
+                    data-to-name="${peer_name}"
+                    class="clearfix${peer_chat_active}" 
+                    onclick="rc.showPeerAboutAndMessages(this.id, '${peer_name}', '${peer_avatar}', event)"
+                >
+                <img 
+                    src="${avatarImg}"
+                    alt="avatar" 
+                />
+                    <div class="about">
+                        <div class="name">${peer_name_limited}</div>
+                        <div class="status"> <i class="fa fa-circle online"></i> online <i id="${peer_id}-unread-msg" class="fas fa-comments hidden"></i> </div>
+                    </div>
+                `;
+
+                // NO ROOM BROADCASTING
+                if (!isBroadcastingEnabled) {
+                    li += `
+                    <div class="dropdown">
+                        <button 
+                            class="dropdown-toggle" 
+                            type="button" 
+                            id="${peer_id}-chatDropDownMenu" 
+                            data-bs-toggle="dropdown" 
+                            aria-expanded="false"
+                            style="float: right"
+                        >
+                        <i class="fas fa-bars"></i>
+                        </button>
+                        <ul class="dropdown-menu text-start" aria-labelledby="${peer_id}-chatDropDownMenu">`;
+
+                    if (BUTTONS.participantsList.sendFileButton) {
+                        li += `<li><button class="btn-sm ml5" id='${peer_id}___shareFile' onclick="rc.selectFileToShare('${peer_id}', false)">${peer_sendFile} Share file</button></li>`;
+                    }
+
+                    li += `<li><button class="btn-sm ml5" id="${peer_id}___sendVideoTo" onclick="rc.shareVideo('${peer_id}');">${_PEER.sendVideo} Share Audio/Video</button></li>
+                        </ul>
+                    </div>
+                    `;
+                }
+
+                li += `
+                    <br/>
+
+                    <div class="about-buttons mt5"> 
+                        <button class="ml5" id='${peer_id}___pAudio' onclick="rc.peerGuestNotAllowed('audio')">${peer_audio}</button>
+                        <button class="ml5" id='${peer_id}___pVideo' onclick="rc.peerGuestNotAllowed('video')">${peer_video}</button>
+                        <button class="ml5" id='${peer_id}___pScreen' onclick="rc.peerGuestNotAllowed('screen')">${peer_screen}</button>
+                        `;
+
+                // li += `
+                //         <button class="ml5" >${peer_presenter}</button>`;
+
+                if (peer_info.peer_hand) {
+                    li += ` 
+                        <button class="ml5" >${peer_hand}</button>`;
+                }
+
+                li += ` 
+                    </div>
+                </li>
+                `;
+            }
+        }
+    }
+    return li;
+}
+
+function setParticipantsTippy(peers) {
+    //
+    if (!isMobileDevice) {
+        setTippy('muteAllButton', 'Mute all participants', 'top');
+        setTippy('hideAllButton', 'Hide all participants', 'top');
+        setTippy('stopAllButton', 'Stop screen share to all participants', 'top');
+        //
+        for (let peer of Array.from(peers.keys())) {
+            const peer_info = peers.get(peer).peer_info;
+            const peer_id = peer_info.peer_id;
+
+            const peerAudioBtn = rc.getId(peer_id + '___pAudio');
+            const peerVideoBtn = rc.getId(peer_id + '___pVideo');
+            const peerScreenBtn = rc.getId(peer_id + '___pScreen');
+
+            if (peerAudioBtn) setTippy(peerAudioBtn.id, 'Mute', 'top');
+            if (peerVideoBtn) setTippy(peerVideoBtn.id, 'Hide', 'top');
+            if (peerScreenBtn) setTippy(peerScreenBtn.id, 'Stop', 'top');
+        }
+    }
+}
+
+function refreshParticipantsCount(count, adapt = true) {
+    if (adapt) adaptAspectRatio(count);
+}
+
+function getParticipantAvatar(peerName, peerAvatar = false) {
+    if (peerAvatar && rc.isImageURL(peerAvatar)) {
+        return peerAvatar;
+    }
+    if (rc.isValidEmail(peerName)) {
+        return rc.genGravatar(peerName);
+    }
+    return rc.genAvatarSvg(peerName, 32);
+}
+
+// ####################################################
+// SET THEME
+// ####################################################
+
+function setCustomTheme() {
+    const color = themeCustom.color;
+    swalBackground = `radial-gradient(${color}, ${color})`;
+    document.documentElement.style.setProperty('--body-bg', `radial-gradient(${color}, ${color})`);
+    document.documentElement.style.setProperty('--trx-bg', `radial-gradient(${color}, ${color})`);
+    document.documentElement.style.setProperty('--msger-bg', `radial-gradient(${color}, ${color})`);
+    document.documentElement.style.setProperty('--left-msg-bg', `${color}`);
+    document.documentElement.style.setProperty('--right-msg-bg', `${color}`);
+    document.documentElement.style.setProperty('--select-bg', `${color}`);
+    document.documentElement.style.setProperty('--tab-btn-active', `${color}`);
+    document.documentElement.style.setProperty('--settings-bg', `radial-gradient(${color}, ${color})`);
+    document.documentElement.style.setProperty('--wb-bg', `radial-gradient(${color}, ${color})`);
+    // document.documentElement.style.setProperty('--btns-bg-color', `${color}`);
+    document.documentElement.style.setProperty('--btns-bg-color', 'rgba(0, 0, 0, 0.7)');
+    document.documentElement.style.setProperty('--dd-color', '#FFFFFF');
+    document.body.style.background = `radial-gradient(${color}, ${color})`;
+}
+
+function setTheme() {
+    if (themeCustom.keep) return setCustomTheme();
+
+    selectTheme.selectedIndex = localStorageSettings.theme;
+    const theme = selectTheme.value;
+    switch (theme) {
+        case 'default':
+            swalBackground = 'linear-gradient(135deg, #000000, #434343)';
+            document.documentElement.style.setProperty('--body-bg', 'linear-gradient(135deg, #000000, #434343)');
+            document.documentElement.style.setProperty('--trx-bg', 'linear-gradient(135deg, #000000, #434343)');
+            document.documentElement.style.setProperty('--msger-bg', 'linear-gradient(135deg, #000000, #434343)');
+            document.documentElement.style.setProperty('--left-msg-bg', '#1a1a1a');
+            document.documentElement.style.setProperty('--right-msg-bg', '#2e2e2e');
+            document.documentElement.style.setProperty('--select-bg', '#333333');
+            document.documentElement.style.setProperty('--tab-btn-active', '#434343');
+            document.documentElement.style.setProperty('--settings-bg', 'linear-gradient(135deg, #000000, #434343)');
+            document.documentElement.style.setProperty('--wb-bg', 'linear-gradient(135deg, #000000, #434343)');
+            document.documentElement.style.setProperty('--btns-bg-color', 'rgba(0, 0, 0, 0.7)');
+            document.documentElement.style.setProperty('--dd-color', '#FFFFFF');
+            document.body.style.background = 'linear-gradient(135deg, #000000, #434343)';
+            selectTheme.selectedIndex = 0;
+            break;
+        case 'dark':
+            swalBackground = 'linear-gradient(135deg, #000000, #1a1a1a)';
+            document.documentElement.style.setProperty('--body-bg', 'linear-gradient(135deg, #000000, #1a1a1a)');
+            document.documentElement.style.setProperty('--trx-bg', 'linear-gradient(135deg, #000000, #1a1a1a)');
+            document.documentElement.style.setProperty('--msger-bg', 'linear-gradient(135deg, #000000, #1a1a1a)');
+            document.documentElement.style.setProperty('--left-msg-bg', '#0d0d0d');
+            document.documentElement.style.setProperty('--right-msg-bg', '#1a1a1a');
+            document.documentElement.style.setProperty('--select-bg', '#1a1a1a');
+            document.documentElement.style.setProperty('--tab-btn-active', '#1a1a1a');
+            document.documentElement.style.setProperty('--settings-bg', 'linear-gradient(135deg, #000000, #1a1a1a)');
+            document.documentElement.style.setProperty('--wb-bg', 'linear-gradient(135deg, #000000, #1a1a1a)');
+            document.documentElement.style.setProperty('--btns-bg-color', 'rgba(0, 0, 0, 0.85)');
+            document.documentElement.style.setProperty('--dd-color', '#FFFFFF');
+            document.body.style.background = 'linear-gradient(135deg, #000000, #1a1a1a)';
+            selectTheme.selectedIndex = 1;
+            break;
+        case 'grey':
+            swalBackground = 'linear-gradient(135deg, #1a1a1a, #4f4f4f)';
+            document.documentElement.style.setProperty('--body-bg', 'linear-gradient(135deg, #1a1a1a, #4f4f4f)');
+            document.documentElement.style.setProperty('--trx-bg', 'linear-gradient(135deg, #1a1a1a, #4f4f4f)');
+            document.documentElement.style.setProperty('--msger-bg', 'linear-gradient(135deg, #1a1a1a, #4f4f4f)');
+            document.documentElement.style.setProperty('--left-msg-bg', '#2c2c2c');
+            document.documentElement.style.setProperty('--right-msg-bg', '#3f3f3f');
+            document.documentElement.style.setProperty('--select-bg', '#2a2a2a');
+            document.documentElement.style.setProperty('--tab-btn-active', '#4f4f4f');
+            document.documentElement.style.setProperty('--settings-bg', 'linear-gradient(135deg, #1a1a1a, #4f4f4f)');
+            document.documentElement.style.setProperty('--wb-bg', 'linear-gradient(135deg, #1a1a1a, #4f4f4f)');
+            document.documentElement.style.setProperty('--btns-bg-color', 'rgba(0, 0, 0, 0.7)');
+            document.documentElement.style.setProperty('--dd-color', '#FFFFFF');
+            document.body.style.background = 'linear-gradient(135deg, #1a1a1a, #4f4f4f)';
+            selectTheme.selectedIndex = 2;
+            break;
+        case 'green':
+            swalBackground = 'linear-gradient(135deg, #002a22, #004d40)';
+            document.documentElement.style.setProperty('--body-bg', 'linear-gradient(135deg, #002a22, #004d40)');
+            document.documentElement.style.setProperty('--trx-bg', 'linear-gradient(135deg, #002a22, #004d40)');
+            document.documentElement.style.setProperty('--msger-bg', 'linear-gradient(135deg, #002a22, #004d40)');
+            document.documentElement.style.setProperty('--left-msg-bg', '#001d1a');
+            document.documentElement.style.setProperty('--right-msg-bg', '#003d2e');
+            document.documentElement.style.setProperty('--select-bg', '#002a22');
+            document.documentElement.style.setProperty('--tab-btn-active', '#004d40');
+            document.documentElement.style.setProperty('--settings-bg', 'linear-gradient(135deg, #002a22, #004d40)');
+            document.documentElement.style.setProperty('--wb-bg', 'linear-gradient(135deg, #002a22, #004d40)');
+            document.documentElement.style.setProperty('--btns-bg-color', 'rgba(0, 42, 34, 0.7)');
+            document.documentElement.style.setProperty('--dd-color', '#00FF00');
+            document.body.style.background = 'linear-gradient(135deg, #002a22, #004d40)';
+            selectTheme.selectedIndex = 3;
+            break;
+        case 'blue':
+            swalBackground = 'linear-gradient(135deg, #00274d, #004d80)';
+            document.documentElement.style.setProperty('--body-bg', 'linear-gradient(135deg, #00274d, #004d80)');
+            document.documentElement.style.setProperty('--trx-bg', 'linear-gradient(135deg, #00274d, #004d80)');
+            document.documentElement.style.setProperty('--msger-bg', 'linear-gradient(135deg, #00274d, #004d80)');
+            document.documentElement.style.setProperty('--left-msg-bg', '#001f3f');
+            document.documentElement.style.setProperty('--right-msg-bg', '#003366');
+            document.documentElement.style.setProperty('--select-bg', '#00274d');
+            document.documentElement.style.setProperty('--tab-btn-active', '#004d80');
+            document.documentElement.style.setProperty('--settings-bg', 'linear-gradient(135deg, #00274d, #004d80)');
+            document.documentElement.style.setProperty('--wb-bg', 'linear-gradient(135deg, #00274d, #004d80)');
+            document.documentElement.style.setProperty('--btns-bg-color', 'rgba(0, 39, 77, 0.7)');
+            document.documentElement.style.setProperty('--dd-color', '#1E90FF');
+            document.body.style.background = 'linear-gradient(135deg, #00274d, #004d80)';
+            selectTheme.selectedIndex = 4;
+            break;
+        case 'red':
+            swalBackground = 'linear-gradient(135deg, #2a0d0d, #4d1a1a)';
+            document.documentElement.style.setProperty('--body-bg', 'linear-gradient(135deg, #2a0d0d, #4d1a1a)');
+            document.documentElement.style.setProperty('--trx-bg', 'linear-gradient(135deg, #2a0d0d, #4d1a1a)');
+            document.documentElement.style.setProperty('--msger-bg', 'linear-gradient(135deg, #2a0d0d, #4d1a1a)');
+            document.documentElement.style.setProperty('--left-msg-bg', '#2b0f0f');
+            document.documentElement.style.setProperty('--right-msg-bg', '#4d1a1a');
+            document.documentElement.style.setProperty('--select-bg', '#2a0d0d');
+            document.documentElement.style.setProperty('--tab-btn-active', '#4d1a1a');
+            document.documentElement.style.setProperty('--settings-bg', 'linear-gradient(135deg, #2a0d0d, #4d1a1a)');
+            document.documentElement.style.setProperty('--wb-bg', 'linear-gradient(135deg, #2a0d0d, #4d1a1a)');
+            document.documentElement.style.setProperty('--btns-bg-color', 'rgba(42, 13, 13, 0.7)');
+            document.documentElement.style.setProperty('--dd-color', '#FF4500');
+            document.body.style.background = 'linear-gradient(135deg, #2a0d0d, #4d1a1a)';
+            selectTheme.selectedIndex = 5;
+            break;
+        case 'purple':
+            swalBackground = 'linear-gradient(135deg, #2a001d, #4d004a)';
+            document.documentElement.style.setProperty('--body-bg', 'linear-gradient(135deg, #2a001d, #4d004a)');
+            document.documentElement.style.setProperty('--trx-bg', 'linear-gradient(135deg, #2a001d, #4d004a)');
+            document.documentElement.style.setProperty('--msger-bg', 'linear-gradient(135deg, #2a001d, #4d004a)');
+            document.documentElement.style.setProperty('--left-msg-bg', '#1b0014');
+            document.documentElement.style.setProperty('--right-msg-bg', '#3e002a');
+            document.documentElement.style.setProperty('--select-bg', '#2a001d');
+            document.documentElement.style.setProperty('--tab-btn-active', '#4d004a');
+            document.documentElement.style.setProperty('--settings-bg', 'linear-gradient(135deg, #2a001d, #4d004a)');
+            document.documentElement.style.setProperty('--wb-bg', 'linear-gradient(135deg, #2a001d, #4d004a)');
+            document.documentElement.style.setProperty('--btns-bg-color', 'rgba(42, 0, 29, 0.7)');
+            document.documentElement.style.setProperty('--dd-color', '#BF00FF');
+            document.body.style.background = 'linear-gradient(135deg, #2a001d, #4d004a)';
+            selectTheme.selectedIndex = 6;
+            break;
+        case 'orange':
+            swalBackground = 'linear-gradient(135deg, #3d1a00, #ff8c00)';
+            document.documentElement.style.setProperty('--body-bg', 'linear-gradient(135deg, #3d1a00, #ff8c00)');
+            document.documentElement.style.setProperty('--trx-bg', 'linear-gradient(135deg, #3d1a00, #ff8c00)');
+            document.documentElement.style.setProperty('--msger-bg', 'linear-gradient(135deg, #3d1a00, #ff8c00)');
+            document.documentElement.style.setProperty('--left-msg-bg', '#2c0f00');
+            document.documentElement.style.setProperty('--right-msg-bg', '#ff8c00');
+            document.documentElement.style.setProperty('--select-bg', '#3d1a00');
+            document.documentElement.style.setProperty('--tab-btn-active', '#ff8c00');
+            document.documentElement.style.setProperty('--settings-bg', 'linear-gradient(135deg, #3d1a00, #ff8c00)');
+            document.documentElement.style.setProperty('--wb-bg', 'linear-gradient(135deg, #3d1a00, #ff8c00)');
+            document.documentElement.style.setProperty('--btns-bg-color', 'rgba(61, 26, 0, 0.7)');
+            document.documentElement.style.setProperty('--dd-color', '#FFA500');
+            document.body.style.background = 'linear-gradient(135deg, #3d1a00, #ff8c00)';
+            selectTheme.selectedIndex = 7;
+            break;
+        case 'pink':
+            swalBackground = 'linear-gradient(135deg, #4d001d, #ff66b2)';
+            document.documentElement.style.setProperty('--body-bg', 'linear-gradient(135deg, #4d001d, #ff66b2)');
+            document.documentElement.style.setProperty('--trx-bg', 'linear-gradient(135deg, #4d001d, #ff66b2)');
+            document.documentElement.style.setProperty('--msger-bg', 'linear-gradient(135deg, #4d001d, #ff66b2)');
+            document.documentElement.style.setProperty('--left-msg-bg', '#3e0016');
+            document.documentElement.style.setProperty('--right-msg-bg', '#ff66b2');
+            document.documentElement.style.setProperty('--select-bg', '#4d001d');
+            document.documentElement.style.setProperty('--tab-btn-active', '#ff66b2');
+            document.documentElement.style.setProperty('--settings-bg', 'linear-gradient(135deg, #4d001d, #ff66b2)');
+            document.documentElement.style.setProperty('--wb-bg', 'linear-gradient(135deg, #4d001d, #ff66b2)');
+            document.documentElement.style.setProperty('--btns-bg-color', 'rgba(77, 0, 29, 0.7)');
+            document.documentElement.style.setProperty('--dd-color', '#FF1493');
+            document.body.style.background = 'linear-gradient(135deg, #4d001d, #ff66b2)';
+            selectTheme.selectedIndex = 8;
+            break;
+        case 'yellow':
+            swalBackground = 'linear-gradient(135deg, #4d3b00, #ffc107)';
+            document.documentElement.style.setProperty('--body-bg', 'linear-gradient(135deg, #4d3b00, #ffc107)');
+            document.documentElement.style.setProperty('--trx-bg', 'linear-gradient(135deg, #4d3b00, #ffc107)');
+            document.documentElement.style.setProperty('--msger-bg', 'linear-gradient(135deg, #4d3b00, #ffc107)');
+            document.documentElement.style.setProperty('--left-msg-bg', '#3b2d00');
+            document.documentElement.style.setProperty('--right-msg-bg', '#ffc107');
+            document.documentElement.style.setProperty('--select-bg', '#4d3b00');
+            document.documentElement.style.setProperty('--tab-btn-active', '#ffc107');
+            document.documentElement.style.setProperty('--settings-bg', 'linear-gradient(135deg, #4d3b00, #ffc107)');
+            document.documentElement.style.setProperty('--wb-bg', 'linear-gradient(135deg, #4d3b00, #ffc107)');
+            document.documentElement.style.setProperty('--btns-bg-color', 'rgba(77, 59, 0, 0.7)');
+            document.documentElement.style.setProperty('--dd-color', '#FFD700');
+            document.body.style.background = 'linear-gradient(135deg, #4d3b00, #ffc107)';
+            selectTheme.selectedIndex = 9;
+            break;
+        default:
+            break;
+    }
+    wbIsBgTransparent = false;
+    if (rc) rc.isChatBgTransparent = false;
+}
+
+// ####################################################
+// HANDLE ASPECT RATIO
+// ####################################################
+
+function handleAspectRatio() {
+    if (videoMediaContainer.childElementCount > 1) {
+        adaptAspectRatio(videoMediaContainer.childElementCount);
+    } else {
+        resizeVideoMedia();
+    }
+}
+
+function adaptAspectRatio(participantsCount) {
+    if (BtnAspectRatio.selectedIndex !== 0) {
+        // User preferred aspect ratio
+        setAspectRatio(BtnAspectRatio.selectedIndex);
+        return;
+    }
+
+    // Update the participants count badge
+    if (participantsCountBadge) {
+        participantsCountBadge.textContent = participantsCount;
+        participantsCount > 1
+            ? elemDisplay('participantsCountBadge', true, 'flex')
+            : elemDisplay('participantsCountBadge', false);
+    }
+
+    /* 
+        ['0:0', '4:3', '16:9', '1:1', '1:2'];
+    */
+    let desktop,
+        mobile = 1;
+    // desktop aspect ratio
+    switch (participantsCount) {
+        case 1:
+        //case 2:
+        case 3:
+        case 4:
+        case 7:
+        case 9:
+            desktop = 2; // (16:9)
+            break;
+        case 5:
+        case 6:
+        case 10:
+        case 11:
+            desktop = 1; // (4:3)
+            break;
+        case 2:
+        case 8:
+            desktop = 3; // (1:1)
+            break;
+        default:
+            desktop = 0; // (0:0)
+    }
+    // mobile aspect ratio
+    switch (participantsCount) {
+        case 3:
+        case 9:
+        case 10:
+            mobile = 2; // (16:9)
+            break;
+        case 2:
+        case 7:
+        case 8:
+        case 11:
+            mobile = 1; // (4:3)
+            break;
+        case 1:
+        case 4:
+        case 5:
+        case 6:
+            mobile = 3; // (1:1)
+            break;
+        default:
+            mobile = 3; // (1:1)
+    }
+    if (participantsCount > 11) {
+        desktop = 1; // (4:3)
+        mobile = 3; // (1:1)
+    }
+
+    const aspectRatio = isMobileDevice ? mobile : desktop;
+    setAspectRatio(aspectRatio);
+}
+
+// ####################################################
+// HANDLE INIT VIRTUAL BACKGROUND AND BLUR
+// ####################################################
+
+function showImageSelector() {
+    elemDisplay('imageGrid', true, 'grid');
+    if (imageGrid.innerHTML !== '') return;
+
+    imageGrid.innerHTML = ''; // Clear previous images
+
+    function createImage(id, src, tooltip, index, clickHandler) {
+        const img = document.createElement('img');
+        img.id = id;
+        img.src = src;
+        img.dataset.index = index;
+        img.addEventListener('click', clickHandler);
+        imageGrid.appendChild(img);
+        if (tooltip) {
+            setTippy(img.id, tooltip, 'top');
+        }
+    }
+
+    // Common function to handle virtual background changes
+    async function handleVirtualBackground(blurLevel = null, imgSrc = null, bgTransparent = null) {
+        if (!blurLevel && !imgSrc && !bgTransparent) {
+            virtualBackgroundBlurLevel = null;
+            virtualBackgroundSelectedImage = null;
+            virtualBackgroundTransparent = null;
+            elemDisplay('imageGrid', false);
+        }
+        await applyVirtualBackground(initVideo, initStream, blurLevel, imgSrc, bgTransparent);
+    }
+
+    // Create clean virtual bg Image
+    createImage('initCleanVbImg', image.user, 'Remove virtual background', 'cleanVb', () =>
+        handleVirtualBackground(null, null)
+    );
+
+    // Create High Blur Image
+    createImage('initHighBlurImg', image.blurHigh, 'High Blur', 'high', () => handleVirtualBackground(20));
+
+    // Create Low Blur Image
+    createImage('initLowBlurImg', image.blurLow, 'Low Blur', 'low', () => handleVirtualBackground(10));
+
+    // Create transparent virtual bg Image
+    createImage('initTransparentBg', image.transparentBg, 'Transparent Virtual background', 'transparentVb', () =>
+        handleVirtualBackground(null, null, true)
+    );
+
+    // Handle file upload (common logic for file selection)
+    function setupFileUploadButton(buttonId, sourceImg, tooltip, handler) {
+        const imgButton = document.createElement('img');
+        imgButton.id = buttonId;
+        imgButton.src = sourceImg;
+        imgButton.addEventListener('click', handler);
+        imageGrid.appendChild(imgButton);
+        setTippy(imgButton.id, tooltip, 'top');
+    }
+
+    function handleFileUpload(file) {
+        if (file && file.type.startsWith('image/')) {
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+                const imgData = e.target.result;
+                await indexedDBHelper.saveImage(imgData);
+                addImageToUI(imgData);
+            };
+            reader.readAsDataURL(file);
+        }
+    }
+
+    function createUploadImageButton() {
+        const fileInput = document.createElement('input');
+        fileInput.type = 'file';
+        fileInput.accept = 'image/*';
+        fileInput.style.display = 'none';
+        fileInput.addEventListener('change', (event) => {
+            handleFileUpload(event.target.files[0]);
+        });
+
+        setupFileUploadButton('initUploadImg', image.upload, 'Upload your custom image', () => fileInput.click());
+
+        return fileInput;
+    }
+
+    // Function to add an image to UI
+    function addImageToUI(imgData) {
+        const imageContainer = document.createElement('div');
+        imageContainer.className = 'image-wrapper';
+
+        const customImg = document.createElement('img');
+        customImg.src = imgData;
+        customImg.addEventListener('click', () => handleVirtualBackground(null, imgData));
+
+        const deleteBtn = document.createElement('span');
+        deleteBtn.className = 'delete-icon fas fa-times';
+        deleteBtn.addEventListener('click', async (event) => {
+            event.stopPropagation();
+            await indexedDBHelper.removeImage(imgData);
+            imageContainer.remove();
+        });
+
+        imageContainer.appendChild(customImg);
+        imageContainer.appendChild(deleteBtn);
+        imageGrid.appendChild(imageContainer);
+    }
+
+    // Function to fetch and store an image from URL
+    async function fetchAndStoreImage(url) {
+        try {
+            const response = await fetch(url);
+            const blob = await response.blob();
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+                const imgData = e.target.result;
+                await indexedDBHelper.saveImage(imgData);
+                addImageToUI(imgData);
+            };
+            reader.readAsDataURL(blob);
+        } catch (error) {
+            console.error('Error fetching image:', error);
+            // Detect CORS issue and provide a clearer error message
+            error.message.includes('Failed to fetch')
+                ? showError(initErrorMessage, 'Error: Unable to fetch image. CORS policy may be blocking the request.')
+                : showError(initErrorMessage, `Error fetching image: ${error.message}`);
+        }
+    }
+
+    // Paste image from URL
+    function askForImageURL() {
+        elemDisplay(initImageUrlModal.id, true);
+        navigator.clipboard
+            .readText()
+            .then((clipboardText) => {
+                if (isValidImageURL(filterXSS(clipboardText))) {
+                    initImageUrlInput.value = clipboardText;
+                }
+            })
+            .catch(() => {});
+    }
+
+    initSaveImageUrlBtn.addEventListener('click', async () => {
+        elemDisplay(initImageUrlModal.id, false);
+        if (isValidImageURL(initImageUrlInput.value)) {
+            await fetchAndStoreImage(initImageUrlInput.value);
+            initImageUrlInput.value = '';
+        }
+    });
+
+    initCancelImageUrlBtn.addEventListener('click', () => {
+        elemDisplay(initImageUrlModal.id, false);
+        initImageUrlInput.value = '';
+    });
+
+    // Upload from file button
+    createUploadImageButton();
+
+    // Upload from URL button
+    setupFileUploadButton('initLinkImage', image.link, 'Upload Image from URL', askForImageURL);
+
+    // Load default virtual backgrounds
+    virtualBackgrounds.forEach((imageUrl, index) => {
+        createImage(`initVirtualBg${index}`, imageUrl, null, index + 1, () => handleVirtualBackground(null, imageUrl));
+    });
+
+    // Load stored images and add to image grid UI
+    indexedDBHelper.getAllImages().then((images) => images.forEach(addImageToUI));
+
+    // Upload image with drag and drop
+    imageGrid.addEventListener('dragover', (event) => {
+        event.preventDefault();
+        imageGrid.classList.add('drag-over');
+    });
+
+    imageGrid.addEventListener('dragleave', () => {
+        imageGrid.classList.remove('drag-over');
+    });
+
+    imageGrid.addEventListener('drop', (event) => {
+        event.preventDefault();
+        imageGrid.classList.remove('drag-over');
+        if (event.dataTransfer.files.length > 0) {
+            handleFileUpload(event.dataTransfer.files[0]);
+        }
+    });
+}
+
+// ####################################################
+// VIRTUAL BACKGROUND HELPER
+// ####################################################
+
+async function applyVirtualBackground(videoElement, stream, blurLevel, backgroundImage, backgroundTransparent) {
+    const videoTrack = stream.getVideoTracks()[0];
+
+    if (blurLevel) {
+        videoElement.srcObject = await virtualBackground.applyBlurToWebRTCStream(videoTrack, blurLevel);
+        virtualBackgroundBlurLevel = blurLevel;
+        virtualBackgroundSelectedImage = null;
+        virtualBackgroundTransparent = null;
+    } else if (backgroundImage) {
+        videoElement.srcObject = await virtualBackground.applyVirtualBackgroundToWebRTCStream(
+            videoTrack,
+            backgroundImage
+        );
+        virtualBackgroundSelectedImage = backgroundImage;
+        virtualBackgroundBlurLevel = null;
+        virtualBackgroundTransparent = null;
+    } else if (backgroundTransparent) {
+        videoElement.srcObject = await virtualBackground.applyTransparentVirtualBackgroundToWebRTCStream(videoTrack);
+        virtualBackgroundBlurLevel = null;
+        virtualBackgroundSelectedImage = null;
+        virtualBackgroundTransparent = true;
+    } else {
+        videoElement.srcObject = stream; // Default case, use original stream
+        virtualBackgroundBlurLevel = null;
+        virtualBackgroundSelectedImage = null;
+        virtualBackgroundTransparent = null;
+    }
+
+    saveVirtualBackgroundSettings(blurLevel, backgroundImage, backgroundTransparent);
+}
+
+function isValidImageURL(url) {
+    return (
+        url.match(/\.(jpeg|jpg|png|gif|webp|bmp|svg|apng|avif|heif|heic|tiff?|ico|cur|jfif|pjpeg|pjp|raw)$/i) !== null
+    );
+}
+
+// ####################################################
+// VIRTUAL BACKGROUND INDEXDB HELPER
+// ####################################################
+
+const indexedDBHelper = {
+    async openDB() {
+        return new Promise((resolve, reject) => {
+            const request = indexedDB.open('customImageDB', 1);
+            request.onupgradeneeded = (event) => {
+                const db = event.target.result;
+                if (!db.objectStoreNames.contains('images')) {
+                    db.createObjectStore('images', { keyPath: 'id', autoIncrement: true });
+                }
+            };
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error);
+        });
+    },
+    async saveImage(imgData) {
+        const db = await this.openDB();
+        const transaction = db.transaction('images', 'readwrite');
+        transaction.objectStore('images').add({ imgData });
+    },
+    async getAllImages() {
+        const db = await this.openDB();
+        return new Promise((resolve, reject) => {
+            const transaction = db.transaction('images', 'readonly');
+            const store = transaction.objectStore('images');
+            const request = store.getAll();
+            request.onsuccess = () => resolve(request.result.map((item) => item.imgData));
+            request.onerror = () => reject(request.error);
+        });
+    },
+    async removeImage(imgData) {
+        const db = await this.openDB();
+        const transaction = db.transaction('images', 'readwrite');
+        const store = transaction.objectStore('images');
+
+        const request = store.getAll();
+        request.onsuccess = () => {
+            const item = request.result.find((item) => item.imgData === imgData);
+            if (item) store.delete(item.id);
+        };
+    },
+};
+
+// ####################################################
+// VIRTUAL BACKGROUND LOCAL STORAGE SETTINGS
+// ####################################################
+
+function saveVirtualBackgroundSettings(blurLevel, imageUrl, transparent) {
+    const settings = {
+        blurLevel: blurLevel || null,
+        imageUrl: imageUrl || null,
+        transparent: transparent || null,
+    };
+    localStorage.setItem('virtualBackgroundSettings', JSON.stringify(settings));
+}
+
+async function loadVirtualBackgroundSettings() {
+    if (!isMediaStreamTrackAndTransformerSupported) return;
+
+    const savedSettings = localStorage.getItem('virtualBackgroundSettings');
+
+    if (!savedSettings) return;
+
+    const { blurLevel, imageUrl, transparent } = JSON.parse(savedSettings);
+
+    if (blurLevel) {
+        await applyVirtualBackground(initVideo, initStream, blurLevel);
+    } else if (imageUrl) {
+        await applyVirtualBackground(initVideo, initStream, null, imageUrl);
+    } else if (transparent) {
+        await applyVirtualBackground(initVideo, initStream, null, null, true);
+    }
+
+    if (virtualBackgroundBlurLevel || virtualBackgroundSelectedImage || virtualBackgroundTransparent) {
+        initVirtualBackgroundButton.click();
+    }
+}
+
+// ####################################################
+// HANDLE ERRORS
+// ####################################################
+
+function showError(errorElement, message, delay = 5000) {
+    errorElement.innerText = message;
+
+    elemDisplay(errorElement.id, true);
+
+    setTimeout(() => {
+        errorElement.classList.add('fade-in');
+        errorElement.classList.remove('fade-out');
+    }, 100);
+
+    setTimeout(() => {
+        errorElement.classList.remove('fade-in');
+        errorElement.classList.add('fade-out');
+    }, delay);
+
+    setTimeout(() => {
+        if (errorElement.classList.contains('fade-out')) {
+            elemDisplay(errorElement.id, false);
+        }
+    }, delay + 500);
+}
+
+// ####################################################
+// HANDLE SESSION EXIT
+// ####################################################
+
+// Call this when the session starts (e.g., after joining a room)
+function startRoomSession() {
+    preventExit = true;
+    // Push a new state so the back button can be intercepted
+    history.pushState({ sessionActive: true }, '', location.href);
+}
+
+// Call this when the session ends (e.g., after leaving a room)
+function endRoomSession() {
+    preventExit = false;
+}
+
+// Intercept browser BACK button
+window.addEventListener('popstate', (event) => {
+    if (!preventExit) return;
+    // Show a custom confirmation dialog
+    Swal.fire({
+        background: swalBackground,
+        position: 'top',
+        title: 'Leave session?',
+        text: 'Are you sure you want to exit this session?',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Yes',
+        cancelButtonText: 'No',
+        confirmButtonColor: '#3085d6',
+        cancelButtonColor: '#d33',
+        showClass: { popup: 'animate__animated animate__fadeInDown' },
+        hideClass: { popup: 'animate__animated animate__fadeOutUp' },
+    }).then((result) => {
+        if (result.isConfirmed) {
+            // Save recording if in progress
+            if (rc.isRecording() || recordingStatus.innerText != '0s') {
+                recShowInfo = false;
+                rc.saveRecording('User popstate changes');
+            }
+            preventExit = false;
+            // Actually go back in history
+            history.back();
+        } else {
+            // Stay in session: push state again to prevent exit
+            history.pushState({ sessionActive: true }, '', location.href);
+        }
+    });
+});
+
+// Intercept tab close, refresh, or direct URL navigation
+window.addEventListener('beforeunload', (e) => {
+    // Save recording if in progress
+    if (rc.isRecording() || recordingStatus.innerText != '0s') {
+        recShowInfo = false;
+        rc.saveRecording('User is closing the tab, refreshing, or navigating away');
+    }
+
+    if (!preventExit || window.localStorage.isReconnected === 'true') return;
+    // Modern browsers ignore custom messages, but this triggers the prompt
+    e.preventDefault();
+    e.returnValue = '';
+});
+
+// ####################################################
+// ABOUT
+// ####################################################
+
+function showAbout() {
+    sound('open');
+
+    Swal.fire({
+        background: swalBackground,
+        position: 'center',
+        imageUrl: BRAND.about?.imageUrl && BRAND.about.imageUrl.trim() !== '' ? BRAND.about.imageUrl : image.about,
+        customClass: { image: 'img-about' },
+        title: BRAND.about?.title && BRAND.about.title.trim() !== '' ? BRAND.about.title : 'WebRTC SFU v2.0.53',
+        html: `
+            <br />
+            <div id="about">
+                ${
+                    BRAND.about?.html && BRAND.about.html.trim() !== ''
+                        ? BRAND.about.html
+                        : `
+                            <button 
+                                id="support-button" 
+                                data-umami-event="Support button" 
+                                onclick="window.open('https://codecanyon.net/user/miroslavpejic85', '_blank')">
+                                <i class="fas fa-heart"></i> Support
+                            </button>
+                            <br /><br /><br />
+                            Author: 
+                            <a 
+                                id="linkedin-button" 
+                                data-umami-event="Linkedin button" 
+                                href="https://www.linkedin.com/in/miroslav-pejic-976a07101/" 
+                                target="_blank"> 
+                                Miroslav Pejic
+                            </a>
+                            <br /><br />
+                            Email: 
+                            <a 
+                                id="email-button" 
+                                data-umami-event="Email button" 
+                                href="mailto:miroslav.pejic.85@gmail.com?subject=MiroTalk SFU info"> 
+                                miroslav.pejic.85@gmail.com
+                            </a>
+                            <br /><br />
+                            <hr />
+                            <span>&copy; 2025 MiroTalk SFU, all rights reserved</span>
+                            <hr />
+                        `
+                }
+            </div>
+        `,
+        showClass: { popup: 'animate__animated animate__fadeInDown' },
+        hideClass: { popup: 'animate__animated animate__fadeOutUp' },
+    });
+}

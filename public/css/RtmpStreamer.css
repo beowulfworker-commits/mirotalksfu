@@ -1,0 +1,270 @@
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@500&display=swap');
+
+body {
+    font-family: 'Montserrat';
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    margin: 0;
+    background: var(--body-bg);
+    color: #fff;
+}
+
+.container {
+    max-width: 800px;
+    margin: 0 auto;
+    text-align: center;
+    padding: 20px;
+    background: var(--body-bg);
+    color: #fff;
+    border-radius: 10px;
+    border: var(--border);
+    box-shadow: var(--box-shadow);
+}
+
+h1 {
+    margin-top: 10px;
+    color: #ffffff;
+}
+
+video {
+    border-radius: 10px;
+    border: var(--border);
+    box-shadow: var(--box-shadow);
+}
+
+.input-group-inline {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+#apiSecret {
+    flex: 1;
+}
+
+#rtmp {
+    flex: 1;
+}
+
+#copyButton {
+    flex: 1;
+    padding: 15px;
+    max-width: 100px;
+}
+
+.input-group-inline > * {
+    margin-bottom: 20px;
+}
+
+input,
+button {
+    padding: 15px;
+    font-size: 16px;
+    border: none;
+    border-radius: 4px;
+    outline: none;
+    box-sizing: border-box;
+}
+
+input[type='text'],
+input[type='password'] {
+    flex: 1;
+    color: #fff;
+    border: var(--border);
+    background: var(--body-bg);
+}
+
+input[type='text'][readonly] {
+    color: #fff;
+    border: var(--border);
+    background: var(--body-bg);
+}
+
+button {
+    cursor: pointer;
+    color: #fff;
+    border: var(--border);
+    background: var(--btns-bg-color);
+    transition: background-color 0.3s ease;
+}
+
+button:disabled {
+    color: grey;
+    background: var(--body-bg);
+    cursor: not-allowed;
+}
+button:hover {
+    background-color: var(--select-bg);
+}
+.button-group {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    margin-top: 20px;
+}
+
+.button-group button {
+    width: 100%;
+}
+
+.popup {
+    z-index: 1000;
+    position: fixed;
+    display: flex;
+    padding: 10px;
+    width: 100%;
+    top: 0px;
+    left: 50%;
+    transform: translateX(-50%);
+    align-items: center;
+    justify-content: center;
+    color: white;
+    background-color: var(--body-bg);
+    box-shadow: var(--box-shadow);
+}
+
+.popup.success {
+    background-color: mediumseagreen;
+    color: white;
+}
+
+.popup.error {
+    background-color: indianred;
+    color: white;
+}
+
+.popup.warning {
+    background-color: gold;
+    color: white;
+}
+
+.popup.info {
+    background-color: cornflowerblue;
+    color: white;
+}
+
+.popup.hidden {
+    display: none;
+}
+
+#closePopup {
+    background: none;
+    border: none;
+    color: white;
+    font-size: 18px;
+    cursor: pointer;
+}
+
+#closePopup:hover {
+    color: var(--select-bg);
+}
+
+footer {
+    width: 100%;
+    margin-top: 10px;
+    color: grey;
+    justify-content: center;
+    text-align: center;
+    background: var(--body-bg);
+}
+
+/* Media Queries for Responsiveness */
+@media (max-width: 1024px) {
+    .container {
+        padding: 15px;
+    }
+    input,
+    button {
+        font-size: 14px;
+    }
+}
+
+@media (max-width: 768px) {
+    .input-group-inline {
+        flex-direction: column;
+    }
+    input,
+    button {
+        width: 100%;
+        font-size: 14px;
+        margin-bottom: 10px;
+    }
+    video {
+        width: 100%;
+        height: auto;
+    }
+    #copyButton {
+        max-width: 100%;
+    }
+}
+
+@media (max-width: 480px) {
+    .container {
+        padding: 10px;
+    }
+    h1 {
+        font-size: 24px;
+    }
+    input,
+    button {
+        font-size: 12px;
+        padding: 8px;
+    }
+}
+
+/*--------------------------------------------------------------
+# Keyframes
+--------------------------------------------------------------*/
+
+@-webkit-keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+@-moz-keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+.fadein {
+    -webkit-animation: fadeIn ease-in 1;
+    -moz-animation: fadeIn ease-in 1;
+    animation: fadeIn ease-in 1;
+    -webkit-animation-fill-mode: forwards;
+    -moz-animation-fill-mode: forwards;
+    animation-fill-mode: forwards;
+    -webkit-animation-duration: 1s;
+    -moz-animation-duration: 1s;
+    animation-duration: 1s;
+}
+
+/*--------------------------------------------------------------
+# Google Translate
+--------------------------------------------------------------*/
+
+.skiptranslate iframe,
+.goog-te-banner-frame.skiptranslate,
+.VIpgJd-ZVi9od-aZ2wEe-wOHMyf,
+.VIpgJd-ZVi9od-aZ2wEe-OiiCO {
+    display: none !important;
+}

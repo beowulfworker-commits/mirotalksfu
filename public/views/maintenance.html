@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="ru">
+    <head>
+        <title>Техническое обслуживание сайта</title>
+        <meta charset="utf-8" />
+        <meta name="robots" content="noindex" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <style>
+            body {
+                text-align: center;
+                padding: 20px;
+                font:
+                    20px Helvetica,
+                    sans-serif;
+                color: #333;
+            }
+
+            @media (min-width: 768px) {
+                body {
+                    padding-top: 150px;
+                }
+            }
+
+            h1 {
+                font-size: 50px;
+            }
+
+            article {
+                display: block;
+                text-align: left;
+                max-width: 650px;
+                margin: 0 auto;
+            }
+
+            a {
+                color: #dc8100;
+                text-decoration: none;
+            }
+
+            a:hover {
+                color: #333;
+                text-decoration: none;
+            }
+        </style>
+    </head>
+
+    <body>
+        <article>
+            <h1>Мы скоро вернёмся!</h1>
+            <div>
+                <p>
+                    Приносим извинения за неудобства — сейчас мы проводим техническое обслуживание. Если вам что-то
+                    нужно, вы всегда можете
+                    <a href="mailto:miroslav.pejic.85@gmail.com">связаться с нами</a>, а мы вскоре вернёмся онлайн!
+                </p>
+                <img src="https://media.giphy.com/media/dWesBcTLavkZuG35MI/giphy.gif" />
+                <p>&mdash; Команда Kremlevka</p>
+            </div>
+        </article>
+    </body>
+    <!--  
+	# Under maintenance custom page
+	error_page 500 502 503 504 /50X.html;
+	location = /maintenance.html {
+		root /usr/share/nginx/html;
+		internal;
+	}
+	-->
+</html>

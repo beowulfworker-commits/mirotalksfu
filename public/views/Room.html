@@ -1,0 +1,1760 @@
+<!doctype html>
+<html lang="ru">
+    <head>
+        <!-- Title and Icon -->
+
+        <title id="title">Кремлёвка - шифрованная связь.</title>
+        <link id="icon" rel="shortcut icon" href="../images/logo.svg" />
+        <link id="appleTouchIcon" rel="apple-touch-icon" href="../images/logo.svg" />
+
+        <meta name="theme-color" content="#ffffff" />
+
+        <!-- Meta Information -->
+
+        <meta charset="utf-8" />
+        <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+        <meta
+            name="viewport"
+            content="width=device-width, height=device-height, initial-scale=1.0, maximum-scale=1.0, user-scalable=0"
+        />
+        <meta
+            id="description"
+            name="description"
+            content="Kremlevka powered by WebRTC and mediasoup, Real-time Simple Secure Fast video calls, messaging and screen sharing capabilities in the browser."
+        />
+        <meta
+            id="keywords"
+            name="keywords"
+            content="webrtc, miro, mediasoup, mediasoup-client, self hosted, voip, sip, real-time communications, chat, messaging, meet, webrtc stun, webrtc turn, webrtc p2p, webrtc sfu, video meeting, video chat, video conference, multi video chat, multi video conference, peer to peer, p2p, sfu, rtc, alternative to, zoom, microsoft teams, google meet, jitsi, meeting"
+        />
+
+        <!-- https://ogp.me -->
+
+        <meta property="og:type" content="{{OG_TYPE}}" />
+        <meta property="og:site_name" content="{{OG_SITE_NAME}}" />
+        <meta property="og:title" content="{{OG_TITLE}}" />
+        <meta property="og:description" content="{{OG_DESCRIPTION}}" />
+        <meta property="og:image" content="{{OG_IMAGE}}" />
+        <meta property="og:url" content="{{OG_URL}}" />
+
+        <!-- StyleSheet -->
+        <link rel="stylesheet" href="../css/Root.css" />
+        <link rel="stylesheet" href="../css/Room.css" />
+        <link rel="stylesheet" href="../css/VideoGrid.css" />
+        <link rel="stylesheet" href="../css/GroupChat.css" />
+        <link rel="stylesheet" href="../css/Polls.css" />
+        <link rel="stylesheet" href="../css/Editor.css" />
+
+        <!-- https://cdnjs.com/libraries/font-awesome -->
+
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.1.1/css/all.min.css" />
+
+        <!-- https://animate.style 4 using for swal fadeIn-Out -->
+
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css" />
+
+        <!-- Bootstrap 5  https://getbootstrap.com/docs/5.0/components/-->
+
+        <link rel="stylesheet" href="https://www.w3schools.com/w3css/4/w3.css" />
+
+        <!-- flatpickr  https://flatpickr.js.org/themes/ -->
+
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css" />
+        <link rel="stylesheet" href="https://npmcdn.com/flatpickr/dist/themes/airbnb.css" />
+
+        <!--  pickr  https://github.com/simonwep/pickr -->
+
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@simonwep/pickr/dist/themes/classic.min.css" />
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@simonwep/pickr/dist/themes/monolith.min.css" />
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@simonwep/pickr/dist/themes/nano.min.css" />
+
+        <!-- Highlight  https://github.com/highlightjs/highlight.js -->
+
+        <link
+            rel="stylesheet"
+            href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.10.0/styles/atom-one-dark.min.css"
+        />
+
+        <!-- Quill  https://github.com/slab/quill -->
+
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/quill@2/dist/quill.snow.css" />
+
+        <!-- Modern or es5 bundle -->
+        <script defer src="https://cdn.jsdelivr.net/npm/@simonwep/pickr/dist/pickr.min.js"></script>
+        <script defer src="https://cdn.jsdelivr.net/npm/@simonwep/pickr/dist/pickr.es5.min.js"></script>
+
+        <!-- Bootstrap 5 -->
+
+        <link
+            href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css"
+            rel="stylesheet"
+            integrity="sha384-EVSTQN3/azprG1Anm3QDgpJLIm9Nao0Yz1ztcQTwFspd3yD65VohhpuuCOmLASjC"
+            crossorigin="anonymous"
+        />
+        <script
+            src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-MrcW6ZMFYlzcLA8Nl+NtUVF0sA7MsXsP1UyJoMp4YLEuNSfAP+JcXn/tWtIaxVXM"
+            crossorigin="anonymous"
+        ></script>
+
+        <!-- axios -->
+
+        <script async src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+
+        <!-- UAParser -->
+
+        <script defer src="https://cdn.jsdelivr.net/npm/ua-parser-js@latest/dist/ua-parser.min.js"></script>
+
+        <script async src="../js/Umami.js"></script>
+        <script defer src="../js/Brand.js"></script>
+        <script async src="../js/Translate.js"></script>
+
+        <!-- Js scripts https://cdn.jsdelivr.net -->
+
+        <script defer src="/socket.io/socket.io.js"></script>
+        <script defer src="../sfu/MediasoupClient.js"></script>
+        <script defer src="https://cdn.jsdelivr.net/npm/xss/dist/xss.min.js"></script>
+        <script defer src="../js/LocalStorage.js"></script>
+        <script defer src="../js/Rules.js"></script>
+        <script defer src="../js/Helpers.js"></script>
+        <script defer src="../js/SpeechRec.js"></script>
+        <script defer src="../js/Transcription.js"></script>
+        <script defer src="../js/VideoGrid.js"></script>
+        <script defer src="../js/VirtualBackground.js"></script>
+        <script defer src="../js/NodeProcessor.js"></script>
+        <script defer src="../js/FixWebmDuration.js"></script>
+        <script defer src="../js/RoomClient.js"></script>
+        <script defer src="../js/Room.js"></script>
+        <script defer src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+        <script defer src="https://cdn.jsdelivr.net/npm/qrious@4.0.2/dist/qrious.min.js"></script>
+        <script defer src="https://cdn.jsdelivr.net/npm/fabric@5.3.0-browser/dist/fabric.min.js"></script>
+        <script defer src="https://cdn.jsdelivr.net/npm/sweetalert2@11.4.8"></script>
+        <script defer src="https://cdn.jsdelivr.net/npm/emoji-mart@latest/dist/browser.js"></script>
+        <script defer src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/2.11.8/umd/popper.min.js"></script>
+        <script defer src="https://cdnjs.cloudflare.com/ajax/libs/tippy.js/6.3.7/tippy-bundle.umd.min.js"></script>
+        <script defer src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+        <script defer src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
+        <script defer src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.2.0/crypto-js.min.js"></script>
+        <script defer src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.10.0/highlight.min.js"></script>
+        <script defer src="https://cdn.jsdelivr.net/npm/quill@2/dist/quill.js"></script>
+        <script defer src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation"></script>
+        <script defer src="https://cdn.jsdelivr.net/npm/gifler@0.1.0/gifler.min.js"></script>
+    </head>
+    <body>
+        <noscript>Для работы приложения необходимо включить JavaScript.</noscript>
+
+        <div id="loadingDiv" class="center pulsate">
+            <h1>Загрузка</h1>
+            <img class="loading-img" src="../images/loading.gif" />
+            <pre>
+Для входа нажимайте - разрешить.
+            </pre>
+        </div>
+
+        <section>
+            <div id="initUser" class="init-user hidden">
+                <div id="initVideoContainer" class="init-video-container">
+                    <video
+                        id="initVideo"
+                        playsinline="true"
+                        autoplay=""
+                        class="mirror"
+                        poster="../images/loader.gif"
+                    ></video>
+                    <div id="imageGrid" class="image-grid fadein"></div>
+                    <span id="initErrorMessage" class="show-error"></span>
+                </div>
+                <div class="initComands">
+                    <div class="init-controls">
+                        <div class="init-buttons">
+                            <button id="initVideoAudioRefreshButton" class="fas fa-rotate"></button>
+                            <button id="initAudioVideoButton" class="fas fa-eye"></button>
+                            <button id="initVideoButton" class="fas fa-video"></button>
+                            <button id="initAudioButton" class="fas fa-microphone"></button>
+                            <button id="initStartScreenButton" class="fas fa-desktop hidden"></button>
+                            <button id="initStopScreenButton" class="fas fa-stop-circle hidden"></button>
+                            <button id="initVideoMirrorButton" class="fas fa-arrow-right-arrow-left hidden"></button>
+                            <button id="initVirtualBackgroundButton" class="fa-solid fa-image hidden"></button>
+                            <button id="initUsernameEmojiButton" class="fas fa-smile"></button>
+                        </div>
+                        <div class="init-device-buttons">
+                            <button
+                                id="initCameraToggleButton"
+                                class="init-device-toggle"
+                                aria-label="Переключить камеру"
+                            >
+                                <i class="fas fa-video-slash"></i>
+                            </button>
+                            <button
+                                id="initMicrophoneToggleButton"
+                                class="init-device-toggle"
+                                aria-label="Переключить микрофон"
+                            >
+                                <i class="fas fa-microphone-slash"></i>
+                            </button>
+                        </div>
+                        <div class="init-selects">
+                            <select id="initVideoSelect" class="form-select text-light bg-dark"></select>
+                            <select id="initMicrophoneSelect" class="form-select text-light bg-dark"></select>
+                            <select id="initSpeakerSelect" class="form-select text-light bg-dark"></select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div id="usernameEmoji" class="usernameEmoji fadein center hidden"></div>
+            <div id="initImageUrlModal" class="imageUrlModal">
+                <div class="imageUrlModal-content fadein">
+                    <h2>Вставьте URL изображения</h2>
+                    <input type="text" id="initImageUrlInput" placeholder="Введите URL изображения здесь..." />
+                    <button id="initSaveImageUrlBtn">Сохранить</button>
+                    <button id="initCancelImageUrlBtn">Отмена</button>
+                </div>
+            </div>
+        </section>
+
+        <div id="imageUrlModal" class="imageUrlModal">
+            <div class="imageUrlModal-content fadein">
+                <h2>Вставьте URL изображения</h2>
+                <input type="text" id="imageUrlInput" placeholder="Введите URL изображения здесь..." />
+                <button id="saveImageUrlBtn">Сохранить</button>
+                <button id="cancelImageUrlBtn">Отмена</button>
+            </div>
+        </div>
+
+        <div id="qrRoomPopupContainer" class="hidden top-center fadein">
+            <canvas id="qrRoomPopup"></canvas>
+            <div id="qrText">Отсканируйте, чтобы присоединиться к комнате</div>
+        </div>
+
+        <div id="control" class="fadein">
+            <button id="shareButton" class="hidden"><i class="fas fa-share-alt"></i></button>
+            <button id="hideMeButton" class="hidden"><i id="hideMeIcon" class="fas fa-user"></i></button>
+            <button id="startRecButton" class="hidden"><i class="fas fa-record-vinyl"></i></button>
+            <button id="stopRecButton" class="hidden"><i class="fas fa-record-vinyl cr"></i></button>
+            <button id="fullScreenButton" class="hidden"><i id="fullScreenIcon" class="fas fa-expand-alt"></i></button>
+            <button id="emojiRoomButton" class="hidden"><i class="fas fa-face-smile"></i></button>
+            <button id="transcriptionButton" class="hidden"><i class="fas fa-closed-captioning"></i></button>
+            <button id="pollButton" class="hidden"><i class="fas fa-square-poll-horizontal"></i></button>
+            <button id="editorButton" class="hidden"><i class="fas fa-pen-to-square"></i></button>
+            <button id="whiteboardButton" class="hidden"><i class="fas fa-chalkboard-teacher"></i></button>
+            <button id="documentPiPButton" class="hidden"><i class="fas fa-images"></i></button>
+            <button id="snapshotRoomButton" class="hidden"><i class="fas fas fa-camera-retro"></i></button>
+            <button id="restartICEButton" class="hidden"><i class="fas fa-satellite-dish"></i></button>
+            <button id="aboutButton" class="hidden"><i class="fas fa-question"></i></button>
+        </div>
+
+        <div id="bottomButtons" class="fadein">
+            <button id="toggleExtraButton" class="hidden"><i class="fas fa-chevron-down"></i></button>
+            <button id="startAudioButton" class="hidden media-start-button" aria-label="Audio">
+                <i class="fas fa-microphone-slash"></i>
+            </button>
+            <button id="stopAudioButton" class="hidden" aria-label="Audio">
+                <i class="fas fa-microphone"></i>
+            </button>
+            <button id="startVideoButton" class="hidden media-start-button" aria-label="Camera">
+                <i class="fas fa-video-slash"></i>
+            </button>
+            <button id="stopVideoButton" class="hidden" aria-label="Camera">
+                <i class="fas fa-video"></i>
+            </button>
+            <button id="swapCameraButton" class="hidden"><i class="fas fa-camera-rotate"></i></button>
+            <button id="startScreenButton" class="hidden"><i class="fas fa-desktop"></i></button>
+            <button id="stopScreenButton" class="hidden"><i class="fas fa-stop-circle"></i></button>
+            <button id="raiseHandButton" class="hidden"><i class="fas fa-hand-paper"></i></button>
+            <button id="lowerHandButton" class="hidden"><i id="lowerHandIcon" class="fas fa-hand-paper"></i></button>
+            <button id="chatButton" class="hidden" aria-label="Chat"><i class="fas fa-comments"></i></button>
+            <button id="settingsButton" class="hidden" aria-label="Settings">
+                <i class="fas fa-cogs"></i>
+            </button>
+            <button id="exitButton" class="hidden"><i class="fa-solid fa-phone-slash"></i></button>
+        </div>
+
+        <div id="permissionOverlay" class="permission-overlay hidden">
+            <div class="permission-banner">
+                <p id="permissionMessage"></p>
+                <button id="permissionRetryButton" class="permission-retry">Повторить</button>
+            </div>
+        </div>
+
+        <div id="emojiPickerContainer" class="roomEmoji fadein">
+            <div id="emojiPickerHeader" class="emojiPickerHeader">
+                <button id="closeEmojiPickerContainer" class="fas fa-times"></button>
+            </div>
+        </div>
+        <div id="userEmoji" class="userEmoji"></div>
+
+        <section id="mySettings" class="fadein center hidden">
+            <header id="mySettingsHeader">
+                <button id="mySettingsCloseBtn" class="fas fa-times"></button>
+            </header>
+            <main class="mySettingsMain">
+                <div class="tab">
+                    <button id="tabRoomBtn" class="fas fa-home tablinks">
+                        <p class="tabButtonText">Комната</p>
+                    </button>
+                    <button id="tabVideoDevicesBtn" class="fas fa-video tablinks">
+                        <p class="tabButtonText">Видео</p>
+                    </button>
+                    <button id="tabAudioDevicesBtn" class="fas fa-microphone tablinks">
+                        <p class="tabButtonText">Аудио</p>
+                    </button>
+                    <button id="tabModeratorBtn" class="fas fa-user-shield tablinks">
+                        <p class="tabButtonText">Модератор</p>
+                    </button>
+                    <button id="tabRecordingBtn" class="fas fa-record-vinyl tablinks">
+                        <p class="tabButtonText">Запись</p>
+                    </button>
+                    <button id="tabVideoAIBtn" class="fab fa-airbnb tablinks">
+                        <p class="tabButtonText">VideoAI</p>
+                    </button>
+                    <button id="tabVideoShareBtn" class="fab fa-youtube tablinks">
+                        <p class="tabButtonText">Медиа</p>
+                    </button>
+                    <button id="tabRTMPStreamingBtn" class="fa-solid fa-satellite-dish tablinks">
+                        <p class="tabButtonText">RTMP</p>
+                    </button>
+                    <button id="tabProfileBtn" class="fas fa-user tablinks">
+                        <p class="tabButtonText">Профиль</p>
+                    </button>
+                    <button id="tabShortcutsBtn" class="fas fa-keyboard tablinks">
+                        <p class="tabButtonText">Ярлыки</p>
+                    </button>
+                    <button id="tabAspectBtn" class="fas fa-screwdriver-wrench tablinks">
+                        <p class="tabButtonText">Аспект</p>
+                    </button>
+                    <button id="tabStylingBtn" class="fas fa-palette tablinks">
+                        <p class="tabButtonText">Стиль</p>
+                    </button>
+                    <button id="tabLanguagesBtn" class="fas fa-globe tablinks">
+                        <p class="tabButtonText">Язык</p>
+                    </button>
+                </div>
+
+                <div class="tabActions">
+                    <div id="tabRoom" class="tabcontent">
+                        <button id="fileShareButton" class="hidden btn-custom">
+                            <i class="fas fa-folder-open"></i>
+                            <p>Обмен файлами</p>
+                        </button>
+                        <br />
+                        <button id="lockRoomButton" class="hidden btn-custom">
+                            <i class="fas fa-lock-open orange"></i>
+                            <p class="orange">Закрыть комнату/p></p>
+                        </button>
+                        <button id="unlockRoomButton" class="hidden btn-custom">
+                            <i class="fas fa-lock red"></i>
+                            <p class="red">Открыть комнату</p>
+                        </button>
+                        <button id="sendEmailInvitation" class="hidden btn-custom">
+                            <i class="fas fa-envelope-circle-check"></i>
+                            <p id="roomSendEmail" class="cp">Пригласить по e-mail</p>
+                        </button>
+                        <hr />
+                        <table class="settingsTable">
+                            <tr id="broadcastingButton" class="hidden">
+                                <td>
+                                    <div class="title">
+                                        <i class="fa-solid fa-wifi"></i>
+                                        <p>Транслировать</p>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="form-check form-switch form-switch-md title">
+                                        <input id="switchBroadcasting" class="form-check-input" type="checkbox" />
+                                    </div>
+                                </td>
+                            </tr>
+                            <tr id="lobbyButton" class="hidden">
+                                <td>
+                                    <div class="title">
+                                        <i class="fas fa-shield-halved"></i>
+                                        <p>Лобби</p>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="form-check form-switch form-switch-md title">
+                                        <input id="switchLobby" class="form-check-input" type="checkbox" />
+                                    </div>
+                                </td>
+                            </tr>
+                            <tr id="pitchBarButton">
+                                <td>
+                                    <div class="title">
+                                        <i class="fas fa-microphone-lines"></i>
+                                        <p>Регулятор громкости</p>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="form-check form-switch form-switch-md">
+                                        <input id="switchPitchBar" class="form-check-input" type="checkbox" checked />
+                                    </div>
+                                </td>
+                            </tr>
+                            <tr id="soundsButton">
+                                <td>
+                                    <div class="title">
+                                        <i class="fas fa-music"></i>
+                                        <p>Звуки</p>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="form-check form-switch form-switch-md">
+                                        <input id="switchSounds" class="form-check-input" type="checkbox" checked />
+                                    </div>
+                                </td>
+                            </tr>
+                            <tr id="shareOnJoinButton">
+                                <td>
+                                    <div class="title">
+                                        <i class="fas fa-share-alt"></i>
+                                        <p>Обмен</p>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="form-check form-switch form-switch-md">
+                                        <input id="switchShare" class="form-check-input" type="checkbox" checked />
+                                    </div>
+                                </td>
+                            </tr>
+                            <tr id="keepButtonsVisibleButton">
+                                <td>
+                                    <div class="title">
+                                        <i class="fas fa-eye"></i>
+                                        <p>Кнопки</p>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="form-check form-switch form-switch-md">
+                                        <input id="switchKeepButtonsVisible" class="form-check-input" type="checkbox" />
+                                    </div>
+                                </td>
+                            </tr>
+                        </table>
+                        <hr />
+                        <table class="settingsTable">
+                            <tr>
+                                <td>
+                                    <div class="title">
+                                        <i class="fa-solid fa-person-shelter"></i>
+                                        <p id="roomId" class="cp">xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx</p>
+                                    </div>
+                                </td>
+                                <td></td>
+                            </tr>
+                            <tr>
+                                <td>
+                                    <div class="title">
+                                        <i class="fas fa-clock"></i>
+                                        <p id="sessionTime">00:00:00</p>
+                                    </div>
+                                </td>
+                                <td></td>
+                            </tr>
+                        </table>
+                    </div>
+
+                    <div id="tabVideoDevices" class="tabcontent">
+                        <button id="refreshVideoDevices" class="btn-custom">
+                            <i class="fas fa-rotate"></i>
+                            <p>Обновить видео</p>
+                        </button>
+                        <br /><br />
+                        <div class="title">
+                            <i class="fas fa-video"></i>
+                            <p>Источник видео:</p>
+                        </div>
+                        <select id="videoSelect" class="form-select text-light bg-dark"></select>
+                        <br />
+                        <div id="videoVirtualBackground" class="hidden">
+                            <div class="title">
+                                <i class="fa-solid fa-image"></i>
+                                <p>Виртуальный фон:</p>
+                            </div>
+                            <div id="imageGridVideo" class="image-grid"></div>
+                            <span id="errorMessage" class="show-error"></span>
+                            <br />
+                        </div>
+                        <div class="title">
+                            <i class="fas fa-palette"></i>
+                            <p>Качество видео:</p>
+                        </div>
+                        <select id="videoQuality" class="form-select text-light bg-dark">
+                            <option value="default">🎥&nbsp;По умолчанию (HD&nbsp;720p)</option>
+                            <option value="qvga">🎥&nbsp;QVGA</option>
+                            <option value="vga">🎥&nbsp;VGA</option>
+                            <option value="hd">🎥&nbsp;HD&nbsp;720p</option>
+                        </select>
+                        <br />
+                        <div id="ScreenQualityDiv" class="hidden">
+                            <div class="title">
+                                <i class="fas fa-palette"></i>
+                                <p>Качество экрана:</p>
+                            </div>
+                            <select id="screenQuality" class="form-select text-light bg-dark">
+                                <option value="default">🖥&nbsp;По умолчанию (HD&nbsp;720p)</option>
+                                <option value="hd">🖥&nbsp;HD&nbsp;720p</option>
+                            </select>
+                        </div>
+                        <br />
+                        <div id="ScreenOptimizationDiv" class="hidden">
+                            <div class="title">
+                                <i class="fa-solid fa-rocket"></i>
+                                <p id="screenOptimizationLabel">Оптимизация экрана:</p>
+                            </div>
+                            <select id="screenOptimization" class="form-select text-light bg-dark">
+                                <option value="default">🖥&nbsp;Без оптимизации</option>
+                                <option value="detail">🖥&nbsp;Детализация</option>
+                                <option value="motion">🖥&nbsp;Движение</option>
+                            </select>
+                        </div>
+                        <hr />
+                        <div class="title">
+                            <i class="fa-solid fa-camera"></i>
+                            <p>Камера FPS:</p>
+                        </div>
+                        <br />
+                        <select id="videoFps" class="form-select text-light bg-dark">
+                            <option value="max">максимальное количество кадров в секунду</option>
+                            <option value="60">60 кадров в секунду</option>
+                            <option value="30">30 кадров в секунду</option>
+                            <option value="15">15 кадров в секунду</option>
+                            <option value="5">5 кадров в секунду</option>
+                        </select>
+                        <br />
+                        <div id="ScreenFpsDiv" class="hidden">
+                            <div class="title">
+                                <i class="fa-solid fa-desktop"></i>
+                                <p>Экран FPS:</p>
+                            </div>
+                            <br />
+                            <select id="screenFps" class="form-select text-light bg-dark">
+                                <option value="max">максимальное количество кадров в секунду</option>
+                                <option value="60">60 кадров в секунду</option>
+                                <option value="30">30 кадров в секунду</option>
+                                <option value="15">15 кадров в секунду</option>
+                                <option value="5">5 кадров в секунду</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div id="tabAudioDevices" class="tabcontent">
+                        <button id="refreshAudioDevices" class="btn-custom">
+                            <i class="fas fa-rotate"></i>
+                            <p>Обновить аудио</p>
+                        </button>
+                        <br /><br />
+                        <div class="title">
+                            <i class="fas fa-microphone"></i>
+                            <p>Микрофон:</p>
+                        </div>
+                        <select id="microphoneSelect" class="form-select text-light bg-dark"></select>
+                        <br />
+                        <div class="volume-container">
+                            <div class="volume-bar"></div>
+                            <div class="volume-bar"></div>
+                            <div class="volume-bar"></div>
+                            <div class="volume-bar"></div>
+                            <div class="volume-bar"></div>
+                            <div class="volume-bar"></div>
+                            <div class="volume-bar"></div>
+                            <div class="volume-bar"></div>
+                            <div class="volume-bar"></div>
+                            <div class="volume-bar"></div>
+                        </div>
+                        <br />
+                        <div id="micOptionsButton">
+                            <table class="settingsTable">
+                                <tr id="noiseSuppressionButton">
+                                    <td>
+                                        <div class="title">
+                                            <i class="fas fa-ear-listen"></i>
+                                            <p id="labelNoiseSuppression">Шумоподавление</p>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div class="form-check form-switch form-switch-md title">
+                                            <input
+                                                id="switchNoiseSuppression"
+                                                class="form-check-input"
+                                                type="checkbox"
+                                            />
+                                        </div>
+                                    </td>
+                                </tr>
+                            </table>
+                        </div>
+                        <br />
+                        <div id="speakerSelectDiv">
+                            <hr />
+                            <div class="title">
+                                <i class="fas fa-headphones"></i>
+                                <p>Динамик:</p>
+                            </div>
+                            <select id="speakerSelect" class="form-select text-light bg-dark"></select>
+                            <button id="speakerTestBtn" class="btn-custom">
+                                <i class="fa-solid fa-circle-play"></i>
+                                <p>Проверить</p>
+                            </button>
+                            <br />
+                        </div>
+                        <div id="pushToTalkDiv" class="hidden">
+                            <hr />
+                            <table class="settingsTable">
+                                <tr id="dominantSpeakerFocusDiv">
+                                    <td>
+                                        <div class="title">
+                                            <i class="fa-solid fa-eye"></i>
+                                            <p>Фокус на динамике</p>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div class="form-check form-switch form-switch-md title">
+                                            <input
+                                                id="switchDominantSpeakerFocus"
+                                                class="form-check-input"
+                                                type="checkbox"
+                                            />
+                                        </div>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td>
+                                        <div class="title">
+                                            <i class="fa-solid fa-hand-pointer"></i>
+                                            <p>Нажать чтобы говорить</p>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div class="form-check form-switch form-switch-md title">
+                                            <input id="switchPushToTalk" class="form-check-input" type="checkbox" />
+                                        </div>
+                                    </td>
+                                </tr>
+                            </table>
+                            <hr />
+                        </div>
+                        <br />
+                    </div>
+
+                    <div id="tabModerator" class="tabcontent">
+                        <span class="mod-title">Опцыи модератра всем</span>
+                        <hr />
+                        <table class="settingsTable">
+                            <tr id="everyonePrivacyBtn">
+                                <td>
+                                    <div class="title">
+                                        <i class="fas fa-circle-user"></i>
+                                        <p>Конфиденс режим</p>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="form-check form-switch form-switch-md">
+                                        <input
+                                            id="switchEveryonePrivacy"
+                                            class="form-check-input"
+                                            type="checkbox"
+                                            checked
+                                        />
+                                    </div>
+                                </td>
+                            </tr>
+                            <tr id="everyoneMuteBtn">
+                                <td>
+                                    <div class="title">
+                                        <i class="fas fa-microphone-slash"></i>
+                                        <p>Присоеденять с выключенным микрофоном</p>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="form-check form-switch form-switch-md title">
+                                        <input id="switchEveryoneMute" class="form-check-input" type="checkbox" />
+                                    </div>
+                                </td>
+                            </tr>
+                            <tr id="everyoneHideBtn">
+                                <td>
+                                    <div class="title">
+                                        <i class="fas fa-video-slash"></i>
+                                        <p>Присоединиться к скрытому</p>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="form-check form-switch form-switch-md">
+                                        <input
+                                            id="switchEveryoneHidden"
+                                            class="form-check-input"
+                                            type="checkbox"
+                                            checked
+                                        />
+                                    </div>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td></td>
+                                <td></td>
+                            </tr>
+                            <tr id="everyoneCantUnmuteBtn">
+                                <td>
+                                    <div class="title">
+                                        <i class="fas fa-microphone red"></i>
+                                        <p>Ограничить самовключение микрофона</p>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="form-check form-switch form-switch-md">
+                                        <input
+                                            id="switchEveryoneCantUnmute"
+                                            class="form-check-input"
+                                            type="checkbox"
+                                            checked
+                                        />
+                                    </div>
+                                </td>
+                            </tr>
+                            <tr id="everyoneCantUnhideBtn">
+                                <td>
+                                    <div class="title">
+                                        <i class="fas fa-video red"></i>
+                                        <p>Ограничить самовключение камеры</p>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="form-check form-switch form-switch-md">
+                                        <input
+                                            id="switchEveryoneCantUnhide"
+                                            class="form-check-input"
+                                            type="checkbox"
+                                            checked
+                                        />
+                                    </div>
+                                </td>
+                            </tr>
+                            <tr id="everyoneCantShareScreenBtn">
+                                <td>
+                                    <div class="title">
+                                        <i class="fas fa-display red"></i>
+                                        <p>Запретить демонстрацию экрана</p>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="form-check form-switch form-switch-md">
+                                        <input
+                                            id="switchEveryoneCantShareScreen"
+                                            class="form-check-input"
+                                            type="checkbox"
+                                            checked
+                                        />
+                                    </div>
+                                </td>
+                            </tr>
+                            <tr id="everyoneCantChatPrivatelyBtn">
+                                <td>
+                                    <div class="title">
+                                        <i class="fa-solid fa-comments red"></i>
+                                        <p>Запретить приватный чат</p>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="form-check form-switch form-switch-md">
+                                        <input
+                                            id="switchEveryoneCantChatPrivately"
+                                            class="form-check-input"
+                                            type="checkbox"
+                                            checked
+                                        />
+                                    </div>
+                                </td>
+                            </tr>
+                            <tr id="everyoneCantChatGPTBtn">
+                                <td>
+                                    <div class="title">
+                                        <i class="fa-solid fa-robot red"></i>
+                                        <p>Отключить доступ к ChatGPT</p>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="form-check form-switch form-switch-md">
+                                        <input
+                                            id="switchEveryoneCantChatChatGPT"
+                                            class="form-check-input"
+                                            type="checkbox"
+                                            checked
+                                        />
+                                    </div>
+                                </td>
+                            </tr>
+                            <tr id="everyoneCantChatDeepSeek">
+                                <td>
+                                    <div class="title">
+                                        <i class="fa-solid fa-robot red"></i>
+                                        <p>Отключить доступ к DeepSeek</p>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="form-check form-switch form-switch-md">
+                                        <input
+                                            id="switchEveryoneCantChatDeepSeek"
+                                            class="form-check-input"
+                                            type="checkbox"
+                                            checked
+                                        />
+                                    </div>
+                                </td>
+                            </tr>
+                            <tr id="everyoneCantMediaSharingBtn">
+                                <td>
+                                    <div class="title">
+                                        <i class="fab fa-youtube red"></i>
+                                        <p>Отключить совместное использование медиа</p>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="form-check form-switch form-switch-md">
+                                        <input
+                                            id="switchEveryoneCantMediaSharing"
+                                            class="form-check-input"
+                                            type="checkbox"
+                                            checked
+                                        />
+                                    </div>
+                                </td>
+                            </tr>
+                            <tr id="disconnectAllOnLeave">
+                                <td>
+                                    <div class="title">
+                                        <i class="fas fa-users-slash red"></i>
+                                        <p>Отключать всех при выходе</p>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="form-check form-switch form-switch-md">
+                                        <input
+                                            id="switchDisconnectAllOnLeave"
+                                            class="form-check-input"
+                                            type="checkbox"
+                                        />
+                                    </div>
+                                </td>
+                            </tr>
+                        </table>
+                    </div>
+
+                    <div id="tabRecording" class="tabcontent">
+                        <img id="recordingImage" class="hidden" src="../images/recording.png" />
+                        <div id="roomRecordingOptions" class="hidden">
+                            <hr />
+                            <table class="settingsTable">
+                                <tr id="roomHostOnlyRecording" class="hidden">
+                                    <td>
+                                        <div class="title">
+                                            <i class="fa-solid fa-user-shield"></i>
+                                            <p>Только ведущий</p>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div class="form-check form-switch form-switch-md title">
+                                            <input
+                                                id="switchHostOnlyRecording"
+                                                class="form-check-input"
+                                                type="checkbox"
+                                            />
+                                        </div>
+                                    </td>
+                                </tr>
+                                <tr id="roomRecordingServer" class="hidden">
+                                    <td>
+                                        <div class="title">
+                                            <i class="fas fa-cloud-arrow-up"></i>
+                                            <p>Сохранить на сервере</p>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div class="form-check form-switch form-switch-md title">
+                                            <input
+                                                id="switchServerRecording"
+                                                class="form-check-input"
+                                                type="checkbox"
+                                            />
+                                        </div>
+                                    </td>
+                                </tr>
+                            </table>
+                        </div>
+                        <button id="pauseRecButton" class="hidden btn-custom">
+                            <i class="far fa-pause-circle"></i>
+                            <p>Пауза записи</p>
+                        </button>
+                        <button id="resumeRecButton" class="hidden btn-custom">
+                            <i class="far fa-play-circle"></i>
+                            <p>Возобновить запись</p>
+                        </button>
+                        <div id="recordingTime" class="hidden">
+                            <hr />
+                            <table class="settingsTable">
+                                <tr>
+                                    <td>
+                                        <div class="title">
+                                            <i class="fa-solid fa-circle pulsate cr"></i>
+                                            <p>Время записи:</p>
+                                        </div>
+                                    </td>
+                                    <td id="recordingStatus">0 с</td>
+                                </tr>
+                            </table>
+                        </div>
+                        <div id="recordingMessage" class="hidden">
+                            <div class="title">
+                                <i class="fa-solid fa-ban fa-2xl"></i>
+                                <p>Докладчик отключил запись встречи.</p>
+                            </div>
+                        </div>
+                        <br />
+                        <div id="lastRecordingInfo" class="hidden"></div>
+                    </div>
+
+                    <div id="tabVideoAI" class="tabcontent">
+                        <div class="avatarsVideoAI">
+                            <video id="avatarVideoAIPreview" poster="../images/loader.gif"></video>
+                            <hr />
+                            <table class="settingsTable">
+                                <tr id="avatars">
+                                    <td>
+                                        <div class="title">
+                                            <i class="fa-solid fa-users-line"></i>
+                                            <p>Показывать свободные аватары</p>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div class="form-check form-switch form-switch-md">
+                                            <input
+                                                id="switchAvatars"
+                                                class="form-check-input"
+                                                type="checkbox"
+                                                checked
+                                            />
+                                        </div>
+                                    </td>
+                                </tr>
+                            </table>
+                            <hr />
+                            <div class="container-flex">
+                                <div id="avatarVideoAIcontainer"></div>
+                                <hr />
+                                <select id="avatarQuality" class="form-select text-light bg-dark">
+                                    <option value="low">Качество аватара — низкое</option>
+                                    <option value="medium" selected>Качество аватара — среднее</option>
+                                    <option value="legacy_medium">Качество аватара — старое среднее</option>
+                                    <option value="high">Качество аватара — высокое</option>
+                                    <option value="very_high" selected>Качество аватара — очень высокое</option>
+                                </select>
+                                <select
+                                    id="avatarVoiceIDs"
+                                    name="avatarVoiceIDs"
+                                    class="form-select text-light bg-dark"
+                                >
+                                    <option value="">Выберите голос аватара</option>
+                                </select>
+                                <div id="audio-container">
+                                    <audio id="avatarPreviewAudio" controls></audio>
+                                </div>
+                                <button id="avatarVideoAIStart" class="btn-custom">
+                                    <i class="fas fa-play"></i> Start Avatar Session
+                                </button>
+                                <hr />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="tabVideoShare" class="tabcontent">
+                        <button id="videoShareButton" class="btn-custom">
+                            <i class="fab fa-youtube"></i>
+                            <p>Поделиться видео или аудио</p>
+                        </button>
+                        <br />
+                        <button id="videoCloseBtn" class="hidden btn-custom">
+                            <i class="fas fa-times"></i>
+                            <p>Закрыть видео или аудио</p>
+                        </button>
+                    </div>
+
+                    <div id="tabRTMPStreaming" class="tabcontent">
+                        <div id="rtmpUrlLive">
+                            <div class="input-container">
+                                <input
+                                    id="rtmpLiveUrl"
+                                    type="text"
+                                    value=""
+                                    placeholder="rtmp://server:port/app/streamKey"
+                                    readonly
+                                />
+                                <button id="copyRtmpUrlButton" class="fas fa-paste"></button>
+                            </div>
+                            <div id="rtmpFromFile">
+                                <table class="file-table">
+                                    <thead>
+                                        <tr>
+                                            <th>
+                                                <i id="refreshVideoFiles" class="fa-solid fa-rotate"></i> Video Files:
+                                            </th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="file-list">
+                                        <!-- File items will be dynamically added here -->
+                                    </tbody>
+                                </table>
+                                <div id="file-name"></div>
+                                <!-- <hr /> -->
+                                <button id="startRtmpButton" class="hidden btn-custom">
+                                    <i class="fa-solid fa-play"></i>&nbsp;Start RTMP File Streaming
+                                </button>
+                                <button id="stopRtmpButton" class="hidden btn-custom">
+                                    <i class="fas fa-stop-circle"></i>&nbsp;Stop RTMP File Streaming
+                                </button>
+                                <hr />
+                            </div>
+                            <div id="rtmpFromUrl">
+                                <p>Трансляция по URL:</p>
+                                <input
+                                    id="rtmpStreamURL"
+                                    type="text"
+                                    value=""
+                                    placeholder="https://domain/path/file.mp4"
+                                />
+                                <button id="startRtmpURLButton" class="hidden btn-custom">
+                                    <i class="fa-solid fa-play"></i>&nbsp;Start RTMP URL Streaming
+                                </button>
+                                <button id="stopRtmpURLButton" class="hidden btn-custom">
+                                    <i class="fas fa-stop-circle"></i>&nbsp;Stop RTMP URL Streaming
+                                </button>
+                                <hr />
+                            </div>
+                            <div id="rtmpFromStream">
+                                <p>
+                                    Select your desired video and audio sources from settings, then begin RTMP streaming
+                                </p>
+                                <button id="streamerRtmpButton" class="hidden btn-custom">
+                                    <i class="fa-solid fa-satellite-dish"></i>&nbsp;RTMP Streamer
+                                </button>
+                                <hr />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="tabProfile" class="tabcontent">
+                        <img id="myProfileAvatar" />
+                        <table id="shortcutsTable">
+                            <tr>
+                                <td>
+                                    <div class="title">
+                                        <i class="fa-solid fa-user"></i>
+                                        <p>Имя пользователя:</p>
+                                        <p id="userName">Имя пользователя</p>
+                                    </div>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>
+                                    <div class="title">
+                                        <i class="fa-solid fa-user-shield"></i>
+                                        <p>Докладчик:</p>
+                                        <p id="isUserPresenter">true</p>
+                                    </div>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>
+                                    <div class="title">
+                                        <i class="fa-solid fa-circle-info"></i>
+                                        <p>Дополнительная информация:</p>
+                                    </div>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>
+                                    <pre id="extraInfo"></pre>
+                                </td>
+                            </tr>
+                        </table>
+                    </div>
+
+                    <div id="tabShortcuts" class="tabcontent">
+                        <table class="settingsTable">
+                            <tr>
+                                <td>
+                                    <div class="title">
+                                        <i class="fa-solid fa-keyboard"></i>
+                                        <p>Горячие клавиши</p>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="form-check form-switch form-switch-md">
+                                        <input id="switchShortcuts" class="form-check-input" type="checkbox" />
+                                    </div>
+                                </td>
+                            </tr>
+                        </table>
+                        <div>
+                            <table id="shortcutsTable">
+                                <thead>
+                                    <tr>
+                                        <th>Ярлыки</th>
+                                        <th>Иконки</th>
+                                        <th>Действия</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td><i class="fa-solid fa-a"></i></td>
+                                        <td><i class="fas fa-microphone"></i></td>
+                                        <td><strong>Вкл/выкл</strong> микрофон</td>
+                                    </tr>
+                                    <tr>
+                                        <td><i class="fa-solid fa-v"></i></td>
+                                        <td><i class="fas fa-video"></i></td>
+                                        <td><strong>Вкл/выкл</strong> камеру</td>
+                                    </tr>
+                                    <tr>
+                                        <td><i class="fa-solid fa-s"></i></td>
+                                        <td><i class="fas fa-desktop"></i></td>
+                                        <td><strong>Вкл/выкл</strong> экран</td>
+                                    </tr>
+                                    <tr>
+                                        <td><i class="fa-solid fa-h"></i></td>
+                                        <td><i class="fas fa-hand-paper"></i></td>
+                                        <td><strong>Вкл/выкл</strong> поднять руку</td>
+                                    </tr>
+                                    <tr>
+                                        <td><i class="fa-solid fa-c"></i></td>
+                                        <td><i class="fas fa-comments"></i></td>
+                                        <td><strong>Вкл/выкл</strong> Чат</td>
+                                    </tr>
+                                    <tr>
+                                        <td><i class="fa-solid fa-o"></i></td>
+                                        <td><i class="fas fa-cogs"></i></td>
+                                        <td><strong>Вкл/выкл</strong> настройки</td>
+                                    </tr>
+                                    <tr>
+                                        <td><i class="fa-solid fa-x"></i></td>
+                                        <td><i class="fas fa-user"></i></td>
+                                        <td><strong>Вкл/выкл</strong> скрыть себя</td>
+                                    </tr>
+                                    <tr>
+                                        <td><i class="fa-solid fa-r"></i></td>
+                                        <td><i class="fas fa-record-vinyl"></i></td>
+                                        <td><strong>Вкл/выкл</strong> запись</td>
+                                    </tr>
+                                    <tr>
+                                        <td><i class="fa-solid fa-j"></i></td>
+                                        <td><i class="fas fa-face-smile"></i></td>
+                                        <td><strong>Вкл/выкл</strong> эмодзи</td>
+                                    </tr>
+                                    <tr>
+                                        <td><i class="fa-solid fa-k"></i></td>
+                                        <td><i class="fas fa-closed-captioning"></i></td>
+                                        <td><strong>Вкл/выкл</strong> субтитры</td>
+                                    </tr>
+                                    <tr>
+                                        <td><i class="fa-solid fa-p"></i></td>
+                                        <td><i class="fas fa-square-poll-horizontal"></i></td>
+                                        <td><strong>Вкл/выкл</strong> опросы</td>
+                                    </tr>
+                                    <tr>
+                                        <td><i class="fa-solid fa-e"></i></td>
+                                        <td><i class="fas fa-pen-to-square"></i></td>
+                                        <td><strong>Вкл/выкл</strong> редактор</td>
+                                    </tr>
+                                    <tr>
+                                        <td><i class="fa-solid fa-w"></i></td>
+                                        <td><i class="fas fa-chalkboard-teacher"></i></td>
+                                        <td><strong>Вкл/выкл</strong> доска</td>
+                                    </tr>
+                                    <tr>
+                                        <td><i class="fa-solid fa-d"></i></td>
+                                        <td><i class="fas fa-images"></i></td>
+                                        <td><strong>Вкл/выкл</strong> документ PIP</td>
+                                    </tr>
+                                    <tr>
+                                        <td><i class="fa-solid fa-t"></i></td>
+                                        <td><i class="fas fas fa-camera-retro"></i></td>
+                                        <td><strong>Снимок</strong> экрана/окна/вкладки</td>
+                                    </tr>
+                                    <tr>
+                                        <td><i class="fa-solid fa-f"></i></td>
+                                        <td><i class="fas fa-folder-open"></i></td>
+                                        <td><strong>Поделиться</strong> файлом</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div id="tabAspect" class="tabcontent">
+                        <br />
+                        <div class="title">
+                            <i class="fa-solid fa-tv"></i>
+                            <p>Соотношение сторон:</p>
+                        </div>
+                        <br />
+                        <select id="BtnAspectRatio" class="form-select text-light bg-dark">
+                            <option value="0">по умолчанию</option>
+                            <option value="1">4:3</option>
+                            <option value="2">16:9</option>
+                            <option value="3">1:1</option>
+                            <option value="4">1:2</option>
+                        </select>
+                        <br />
+                        <div class="title">
+                            <i class="fa-solid fa-film"></i>
+                            <p>Подгонка изображения:</p>
+                        </div>
+                        <br />
+                        <select id="BtnVideoObjectFit" class="form-select text-light bg-dark">
+                            <option value="fill">заполнение</option>
+                            <option value="contain">уместить</option>
+                            <option value="cover">обрезать</option>
+                            <option value="scale-down">уменьшить</option>
+                            <option value="none">нет</option>
+                        </select>
+                        <br />
+                        <div class="title">
+                            <i class="fa-solid fa-circle-play"></i>
+                            <p>Элементы управления видео:</p>
+                        </div>
+                        <br />
+                        <select id="BtnVideoControls" class="form-select text-light bg-dark">
+                            <option value="off">выкл.</option>
+                            <option value="on">вкл.</option>
+                        </select>
+                        <br />
+                    </div>
+
+                    <div id="tabStyling" class="tabcontent">
+                        <br />
+                        <div class="title">
+                            <i class="fa-solid fa-palette"></i>
+                            <p>Тема:</p>
+                        </div>
+                        <br />
+                        <select id="selectTheme" class="form-select text-light bg-dark">
+                            <option value="default">🔘 &nbsp;Стандартная</option>
+                            <option value="dark">⚫ &nbsp;Тёмная</option>
+                            <option value="grey">⚪ &nbsp;Серая</option>
+                            <option value="green">🟢 &nbsp;Зелёная</option>
+                            <option value="blue">🔵 &nbsp;Синяя</option>
+                            <option value="red">🔴 &nbsp;Красная</option>
+                            <option value="purple">🟣 &nbsp;Фиолетовая</option>
+                            <option value="orange">🟠 &nbsp;Оранжевая</option>
+                            <option value="pink">🎀 &nbsp;Розовая</option>
+                            <option value="yellow">🌕 &nbsp;Жёлтая</option>
+                        </select>
+                        <br />
+                        <div class="title">
+                            <i class="fas fa-fill-drip"></i>
+                            <p>Пользовательская тема:</p>
+                        </div>
+                        <br />
+                        <input id="themeColorPicker" class="theme-color-picker" type="text" />
+                        <br />
+                        <div class="inline-check-box">
+                            <div>
+                                <i class="fas fa-save"></i>
+                                <p>Сохранить настройки</p>
+                            </div>
+                            <div class="form-check form-switch form-switch-md title">
+                                <input id="keepCustomTheme" class="form-check-input" type="checkbox" />
+                            </div>
+                        </div>
+                        <br />
+                        <div class="title">
+                            <i class="fa-solid fa-up-down-left-right"></i>
+                            <p>Панель кнопок:</p>
+                        </div>
+                        <br />
+                        <select id="BtnsBarPosition" class="form-select text-light bg-dark">
+                            <option value="vertical">Вертикально</option>
+                            <option value="horizontal">Горизонтально</option>
+                        </select>
+                        <br />
+                        <div id="pinUnpinGridDiv" class="hidden">
+                            <div class="title">
+                                <i class="fa-solid fa-map-pin"></i>
+                                <p>Позиция закреплённого видео:</p>
+                            </div>
+                            <br />
+                            <select id="pinVideoPosition" class="form-select text-light bg-dark">
+                                <option value="vertical">Вертикально</option>
+                                <option value="horizontal">Горизонтально</option>
+                                <option value="top">Сверху</option>
+                            </select>
+                        </div>
+                        <br />
+                    </div>
+
+                    <div id="tabLanguages" class="tabcontent">
+                        <br />
+                        <div class="title">
+                            <i class="fa-solid fa-language"></i>
+                            <p>Язык:</p>
+                        </div>
+                        <br />
+                        <div id="google_translate_element"></div>
+                        <br />
+                    </div>
+                </div>
+            </main>
+        </section>
+
+        <div id="videoPinMediaContainer"></div>
+        <div id="videoMediaContainer">
+            <!-- <div class="Camera"></div> -->
+        </div>
+        <div id="localAudio"></div>
+        <div id="remoteAudios"></div>
+
+        <div id="sendFileDiv" class="fadein center">
+            <img id="imgShareSend" src="../images/share.png" alt="mirotalksfu-share-send" class="center-img" /><br />
+            <div id="sendFileInfo"></div>
+            <div id="sendFilePercentage"></div>
+            <progress id="sendProgress" max="0" value="0"></progress>
+            <button id="sendAbortBtn"><i class="fas fa-stop-circle"></i>&nbsp; Прервать</button>
+        </div>
+
+        <div id="receiveFileDiv" class="fadein center">
+            <img
+                id="imgShareReceive"
+                src="../images/share.png"
+                alt="mirotalksfu-share-receive"
+                class="center-img"
+            /><br />
+            <div id="receiveFileInfo"></div>
+            <div id="receiveFilePercentage"></div>
+            <progress id="receiveProgress" max="0" value="0"></progress>
+            <button id="receiveHideBtn"><i class="fas fa-eye-slash"></i>&nbsp; Скрыть</button>
+            <button id="receiveAbortBtn"><i class="fas fa-stop-circle"></i>&nbsp; Прервать</button>
+        </div>
+
+        <section id="whiteboard" class="fadein center hidden">
+            <header id="whiteboardHeader" class="whiteboard-header">
+                <div id="whiteboardTitle" class="whiteboard-header-title">
+                    <button id="whiteboardCloseBtn" class="fas fa-times"></button>
+                    <button id="whiteboardUnlockBtn" class="fa-solid fa-lock-open hidden"></button>
+                    <button id="whiteboardLockBtn" class="fa-solid fa-lock hidden"></button>
+                </div>
+                <div id="whiteboardOptions" class="whiteboard-header-options">
+                    <button id="whiteboardGhostButton" class="fas fa-circle-half-stroke"></button>
+                    <button id="whiteboardGridBtn" class="fas fa-table-cells-large hidden"></button>
+                    <input id="wbBackgroundColorEl" class="whiteboardColorPicker" type="color" value="#000000" />
+                    <input id="wbDrawingColorEl" class="whiteboardColorPicker" type="color" value="#FFFFFF" />
+                    <button id="whiteboardPencilBtn" class="fas fa-pencil-alt"></button>
+                    <button id="whiteboardVanishingBtn" class="fas fa-wand-magic-sparkles"></button>
+                    <button id="whiteboardObjectBtn" class="fas fa-mouse-pointer"></button>
+                    <button id="whiteboardUndoBtn" class="fas fa-undo"></button>
+                    <button id="whiteboardRedoBtn" class="fas fa-redo"></button>
+                    <div class="dropdown">
+                        <button
+                            class="dropdown-toggle"
+                            type="button"
+                            id="whiteboardDropDownMenu"
+                            data-bs-toggle="dropdown"
+                            aria-expanded="false"
+                        >
+                            <i class="fas fa-ellipsis-vertical"></i>
+                        </button>
+                        <div class="dropdown-menu text-start" aria-labelledby="whiteboardDropDownMenu">
+                            <button id="whiteboardImgFileBtn">
+                                <i class="far fa-image"></i> Добавить файл изображения
+                            </button>
+                            <button id="whiteboardImgUrlBtn">
+                                <i class="fas fa-link"></i> Добавить URL изображения
+                            </button>
+                            <button id="whiteboardPdfFileBtn"><i class="far fa-file-pdf"></i> Добавить PDF-файл</button>
+                            <button id="whiteboardTextBtn"><i class="fas fa-spell-check"></i> Добавить текст</button>
+                            <button id="whiteboardLineBtn"><i class="fas fa-slash"></i> Добавить линию</button>
+                            <button id="whiteboardRectBtn"><i class="far fa-square"></i> Добавить прямоугольник</button>
+                            <button id="whiteboardTriangleBtn">
+                                <svg
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    width="1em"
+                                    height="1em"
+                                    viewBox="0 0 24 24"
+                                    fill="#FFFFFF"
+                                >
+                                    <path d="M12 5.887l8.468 14.113h-16.936l8.468-14.113zm0-3.887l-12 20h24l-12-20z" />
+                                </svg>
+                                Add triangle
+                            </button>
+                            <button id="whiteboardCircleBtn"><i class="far fa-circle"></i> Добавить круг</button>
+                            <button id="whiteboardSaveBtn"><i class="fas fa-save"></i> Сохранить</button>
+                            <button id="whiteboardEraserBtn"><i class="fas fa-eraser"></i> Ластик</button>
+                            <button id="whiteboardCleanBtn"><i class="fas fa-trash"></i> Очистить</button>
+                        </div>
+                    </div>
+                </div>
+            </header>
+            <main>
+                <canvas id="wbCanvas"></canvas>
+            </main>
+        </section>
+
+        <!-- CHAT ROOM CONTAINER -->
+        <section id="chatRoom" class="chat-container container fadein hidden">
+            <!-- CHAT APP -->
+            <div id="chatApp" class="chat-app">
+                <!-- CHAT PEOPLE LIST -->
+                <div id="plist" class="people-list">
+                    <!-- CHAT LIST OPTIONS -->
+                    <div>
+                        <button id="chatShareRoomBtn"><i class="fas fa-user-plus"></i> Пригласить пользователя</button>
+                        <button id="chatHideParticipantsList" class="float-right">
+                            <i class="fas fa-circle-arrow-left"></i>
+                        </button>
+                        <button id="participantsRaiseHandBtn" class="float-right">
+                            <i class="fas fa-hand-paper"></i>
+                        </button>
+                        <button id="participantsUnreadMessagesBtn" class="float-right">
+                            <i class="fas fa-comments"></i>
+                        </button>
+                        <button id="participantsSaveBtn" class="float-right hidden">
+                            <i class="fas fa-save"></i>
+                        </button>
+                    </div>
+                    <br />
+
+                    <!-- CHAT SEARCH -->
+                    <div class="input-group mt5">
+                        <span class="input-group-text"><i class="fa fa-search"></i></span>
+                        <input
+                            id="searchParticipantsFromList"
+                            type="text"
+                            class="form-control"
+                            placeholder="Search..."
+                            maxlength="254"
+                        />
+                    </div>
+
+                    <!-- CHAT LIST -->
+                    <ul id="participantsList" class="list-unstyled chat-list mt-2 mb-0"></ul>
+                </div>
+
+                <!-- CHAT -->
+                <div id="chat" class="chat">
+                    <!-- CHAT HEADER -->
+                    <div id="chatHeader" class="chat-header clearfix">
+                        <div class="w-100">
+                            <!-- CHAT ABOUT -->
+                            <div id="chatAbout" class="text-start">
+                                <img
+                                    class="all-participants-img"
+                                    id="chatShowParticipantsList"
+                                    src="../images/participants.png"
+                                    alt="participants"
+                                />
+                                <a data-toggle="modal" data-target="#view_info">
+                                    <img src="../images/all.png" alt="avatar" />
+                                </a>
+                                <div class="chat-about">
+                                    <h6 class="mb-0">Общий чат</h6>
+                                </div>
+                            </div>
+
+                            <!-- CHAT OPTIONS -->
+                            <div class="chat-option-buttons">
+                                <button id="chatTogglePin" class="hidden">
+                                    <i class="fas fa-map-pin"></i>
+                                </button>
+                                <button id="chatMaxButton" class="hidden">
+                                    <i class="fas fa-expand"></i>
+                                </button>
+                                <button id="chatMinButton" class="hidden">
+                                    <i class="fas fa-compress"></i>
+                                </button>
+                                <!-- CHAT MORE OPTIONS -->
+                                <div class="dropdown">
+                                    <button
+                                        class="dropdown-toggle"
+                                        type="button"
+                                        id="chatDropDownMenu"
+                                        data-bs-toggle="dropdown"
+                                        aria-expanded="false"
+                                    >
+                                        <i class="fas fa-bars"></i>
+                                    </button>
+                                    <ul class="dropdown-menu text-start" aria-labelledby="chatDropDownMenu">
+                                        <li>
+                                            <hr />
+                                            <div class="title ml10">
+                                                <i class="fa-solid fa-eye"></i>
+                                                <div class="form-check form-switch form-switch-md ml10">
+                                                    <input
+                                                        class="form-check-input"
+                                                        type="checkbox"
+                                                        id="showChatOnMsg"
+                                                        checked
+                                                    />
+                                                </div>
+                                                <div id="speechMsgDiv" class="title ml10">
+                                                    <i class="fas fa-volume-high"></i>
+                                                    <div class="form-check form-switch form-switch-md ml10">
+                                                        <input
+                                                            class="form-check-input"
+                                                            type="checkbox"
+                                                            id="speechIncomingMsg"
+                                                        />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <hr />
+                                        </li>
+                                        <li>
+                                            <button id="chatGhostButton" class="btn-sm">
+                                                <i class="fas fa-circle-half-stroke"></i> Toggle bg
+                                            </button>
+                                        </li>
+                                        <li>
+                                            <button id="chatSaveButton" class="btn-sm">
+                                                <i class="fas fa-save"></i> Save messages
+                                            </button>
+                                        </li>
+                                        <li>
+                                            <button id="chatCleanButton" class="btn-sm">
+                                                <i class="fas fa-trash"></i> Clean messages
+                                            </button>
+                                        </li>
+                                    </ul>
+                                </div>
+                                <button id="chatCloseButton">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- CHAT HISTORY -->
+                    <div id="chatHistory" class="chat-history">
+                        <!-- CHAT MESSAGES -->
+                        <ul id="chatGPTMessages" class="mb-0"></ul>
+                        <ul id="deepSeekMessages" class="mb-0"></ul>
+                        <ul id="chatPublicMessages" class="mb-0"></ul>
+                        <ul id="chatPrivateMessages" class="mb-0"></ul>
+
+                        <!-- CHAT EMOJI -->
+                        <div id="chatEmoji" class="hidden fadein chatEmojiPicker"></div>
+                    </div>
+
+                    <!-- CHAT MESSAGE -->
+                    <div class="chat-message clearfix">
+                        <!-- CHAT MESSAGE INPUT -->
+                        <div class="input-group mb-0 w-100">
+                            <div class="input-group mb-3">
+                                <span class="input-group-text"><i class="fas fa-message"></i></span>
+                                <textarea
+                                    id="chatMessage"
+                                    class="form-control"
+                                    placeholder="Enter text here..."
+                                    rows="1"
+                                ></textarea>
+                                <!-- <input 
+                                    id="chatMessage" 
+                                    type="text" 
+                                    class="form-control" 
+                                    placeholder="Enter text here..."
+                                > -->
+                            </div>
+                        </div>
+
+                        <!-- CHAT MESSAGE OPTIONS  -->
+                        <div class="mt10">
+                            <button id="chatEmojiButton" class="float-left mr5 hidden">
+                                <i class="fas fa-smile"></i>
+                            </button>
+                            <button id="chatMarkdownButton" class="float-left mr5 hidden">
+                                <i class="fab fa-markdown"></i>
+                            </button>
+                            <button id="chatSpeechStartButton" class="float-left mr5 hidden">
+                                <i class="fas fa-microphone-slash"></i>
+                            </button>
+                            <button id="chatSpeechStopButton" class="float-left mr5 hidden">
+                                <i class="fas fa-microphone"></i>
+                            </button>
+                            <button id="chatPasteButton" class="float-left mr5 hidden">
+                                <i class="fas fa-paste"></i>
+                            </button>
+                            <button id="chatCleanTextButton" class="float-left mr5 hidden">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                            <button id="chatSendButton" class="float-right hidden">
+                                <i class="fas fa-paper-plane"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="pollRoom" class="pls-container fadein hidden">
+            <div id="pollHeader" class="poll-header">
+                <h2 class="poll-h2">Опросы</h2>
+                <div class="poll-header-btns">
+                    <button id="pollTogglePin" class="hidden">
+                        <i class="fas fa-map-pin"></i>
+                    </button>
+                    <button id="pollMaxButton" class="hidden">
+                        <i class="fas fa-expand"></i>
+                    </button>
+                    <button id="pollMinButton" class="hidden">
+                        <i class="fas fa-compress"></i>
+                    </button>
+                    <button id="pollSaveButton">
+                        <i class="fas fa-floppy-disk"></i>
+                    </button>
+                    <button id="pollCloseBtn">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            </div>
+            <div id="pollForm" class="poll-creation">
+                <form id="pollCreateForm" class="form">
+                    <div class="form-group">
+                        <label for="question">Вопрос:</label>
+                        <input type="text" id="question" name="question" required />
+                    </div>
+                    <div class="form-group">
+                        <label for="options">Варианты:</label>
+                        <div id="optionsContainer">
+                            <input type="text" name="option" class="option-input" required />
+                        </div>
+                        <br />
+                        <div class="poll-btns">
+                            <button type="button" id="pollAddOptionBtn" class="poll-btn">
+                                <i class="fas fa-plus"></i>
+                            </button>
+                            <button type="button" id="pollDelOptionBtn" class="del-btn">
+                                <i class="fas fa-minus"></i>
+                            </button>
+                            <button type="submit" id="addPollButton" class="poll-btn">
+                                <i class="fas fa-square-poll-horizontal"></i> Create Poll
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="polls">
+                <div id="pollsContainer" class="polls-container"></div>
+            </div>
+        </section>
+
+        <section id="editorRoom" class="editor-container fadein hidden">
+            <div id="editorHeader" class="editor-header">
+                <div class="editor-header-btns">
+                    <button id="editorTogglePin" class="fas fa-map-pin hidden"></button>
+                    <button id="editorUnlockBtn" class="fa-solid fa-lock-open hidden"></button>
+                    <button id="editorLockBtn" class="fa-solid fa-lock hidden"></button>
+                    <button id="editorUndoBtn" class="fas fa-undo"></button>
+                    <button id="editorRedoBtn" class="fas fa-redo"></button>
+                    <button id="editorCopyBtn" class="fas fa-paste"></button>
+                    <button id="editorSaveBtn" class="fas fa-floppy-disk"></button>
+                    <button id="editorCleanBtn" class="fas fa-trash"></button>
+                    <button id="editorCloseBtn" class="fas fa-times"></button>
+                </div>
+            </div>
+            <div class="editor" id="editor"></div>
+        </section>
+
+        <section id="transcriptionRoom" class="transcription-room fadein">
+            <section id="transcriptionSection" class="transcription">
+                <header id="transcriptionHeader" class="transcription-header">
+                    <div class="transcription-header-title">
+                        <button id="transcriptionSpeechStatus" class="fas fa-microphone-alt"></button>
+                    </div>
+                    <div class="transcription-header-options">
+                        <button id="transcriptionTogglePinBtn" class="fas fa-map-pin"></button>
+                        <button id="transcriptionMaxBtn" class=""><i class="fas fa-expand"></i></button>
+                        <button id="transcriptionMinBtn" class="hidden"><i class="fas fa-compress"></i></button>
+                        <div class="dropdown title">
+                            <button
+                                class="dropdown-toggle"
+                                type="button"
+                                id="transcriptionDropDownMenu"
+                                data-bs-toggle="dropdown"
+                                aria-expanded="false"
+                            >
+                                <i class="fas fa-bars"></i>
+                            </button>
+                            <ul class="dropdown-menu text-start" aria-labelledby="transcriptionDropDownMenu">
+                                <li>
+                                    <hr />
+                                    <div class="title ml5">
+                                        <i class="fa-solid fa-eye"></i>
+                                        <div class="form-check form-switch form-switch-md ml-5">
+                                            <input
+                                                class="form-check-input"
+                                                type="checkbox"
+                                                id="transcriptShowOnMsg"
+                                                checked
+                                            />
+                                        </div>
+                                    </div>
+                                    <hr />
+                                </li>
+                                <li>
+                                    <button id="transcriptionGhostBtn">
+                                        <i class="fas fa-circle-half-stroke"></i>&nbsp;Toggle bg
+                                    </button>
+                                </li>
+                                <li id="transcriptionAllLi" class="hidden">
+                                    <button id="transcriptionAllBtn">
+                                        <i class="fas fa-play"></i>&nbsp;Start for all
+                                    </button>
+                                </li>
+                                <li>
+                                    <button id="transcriptionSaveBtn">
+                                        <i class="fas fa-save"></i>&nbsp;Сохранить
+                                    </button>
+                                </li>
+                                <li>
+                                    <button id="transcriptionCleanBtn">
+                                        <i class="fas fa-trash"></i>&nbsp;Очистить
+                                    </button>
+                                </li>
+                            </ul>
+                        </div>
+                        <button id="transcriptionCloseBtn" class="fas fa-times"></button>
+                    </div>
+                </header>
+                <main id="transcriptionChat" class="transcription-chat"></main>
+                <div id="transcriptionFooter" class="transcription-inputarea">
+                    <select id="transcriptionLanguage" class="form-select text-light bg-dark"></select>
+                    <select id="transcriptionDialect" class="form-select text-light bg-dark"></select>
+                    <button id="transcriptionSpeechStart" class=""><i class="fas fa-play"></i></button>
+                    <button id="transcriptionSpeechStop" class="hidden"><i class="fas fa-stop"></i></button>
+                </div>
+            </section>
+        </section>
+
+        <div id="transcriptionPopup" class="transcriptio-popup"></div>
+
+        <section id="lobby" class="fadein center">
+            <header id="lobbyHeader" class="lobby-header">
+                <div id="lobbyHeaderTitle" class="lobby-header-title">Пользователи в лобби</div>
+            </header>
+            <main>
+                <div id="lobbyUsers">
+                    <table id="lobbyTb">
+                        <tr>
+                            <th></th>
+                            <th></th>
+                            <th></th>
+                            <th></th>
+                        </tr>
+                        <tr id="lobbyAll">
+                            <td>&nbsp;<i class="fas fa-users fa-lg"></i></td>
+                            <td>Все</td>
+                            <td><button id="lobbyAcceptAllBtn" class="fas fa-check"></button></td>
+                            <td><button id="lobbyRejectAllBtn" class="fas fa-times"></button></td>
+                        </tr>
+                    </table>
+                </div>
+            </main>
+        </section>
+    </body>
+</html>
